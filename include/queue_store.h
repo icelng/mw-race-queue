@@ -22,12 +22,16 @@ namespace race2018 {
 
         MemBlock(const MemBlock& other);
 
-        size_t length() {
+        size_t length() const {
             return m_length;
         }
 
-        std::string to_string() {
+        std::string to_string() const {
             return std::string(m_data, m_length);
+        }
+
+        char operator[](int index) const {
+            return *(m_data + index);
         }
 
     private:

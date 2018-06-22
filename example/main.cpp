@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstring>
+#include <boost/filesystem.hpp>
 #include "queue_store.h"
 
 using namespace std;
@@ -15,6 +17,7 @@ int main(int argc, char* argv[]) {
         char* data = new char[slogan.size()];
         strcpy(data, slogan.c_str());
         MemBlock msg(data, strlen(data));
+        cout << msg[3] << endl;
         store.put("Queue-1", msg);
     }
 
