@@ -34,6 +34,10 @@ namespace race2018 {
             return *(m_data + index);
         }
 
+        const char* data() const {
+            return m_data;
+        }
+
     private:
         const char* m_data;
         size_t m_length;
