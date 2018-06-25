@@ -35,3 +35,9 @@ make
 ```commandline
 ./sample
 ```
+
+
+
+选手需要做的是重写queue_store.cpp,更多资料参考Java的Demo。
+
+
