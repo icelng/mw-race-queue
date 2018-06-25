@@ -16,7 +16,7 @@ MemBlock::~MemBlock() {
     if (ref) {
         ref->fetch_sub(1);
         if (0 == ref->load()) {
-            delete(m_data);
+            delete[](m_data);
             delete(ref);
         }
     }

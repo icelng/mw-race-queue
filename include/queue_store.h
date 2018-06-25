@@ -10,6 +10,7 @@
 
 namespace race2018 {
 
+    // Assume that data is allocated by new char[]
     class MemBlock {
     public:
         MemBlock(const char* data, size_t length) :
