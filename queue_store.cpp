@@ -7,9 +7,62 @@ MemBlock::MemBlock(const MemBlock& other) {
     m_data = other.m_data;
     m_length = other.m_length;
     ref = other.ref;
-    if (m_data) {
+    if (ref) {
         ref->fetch_add(1);
     }
+}
+
+MemBlock::MemBlock(MemBlock &&other) noexcept : m_data(nullptr),
+                                       ref(nullptr),
+                                       m_length(0) {
+    *this = move(other);
+}
+
+MemBlock& MemBlock::operator=(const MemBlock &other) {
+
+    if (this != &other) {
+        if (ref) {
+            ref->fetch_sub(1);
+            if (0 == ref->load()) {
+                delete[] m_data;
+                delete ref;
+            }
+        }
+
+        m_data = other.m_data;
+        ref = other.ref;
+        m_length = other.m_length;
+        if (ref) {
+            ref->fetch_add(1);
+        }
+    }
+
+    return *this;
+}
+
+MemBlock& MemBlock::operator=(MemBlock &&other) noexcept {
+    if (this != &other) {
+        if (ref) {
+            ref->fetch_sub(1);
+            if(0 == ref->load()) {
+                delete[](m_data);
+                delete ref;
+                m_length = 0;
+            }
+        }
+
+        // Assign
+        ref = other.ref;
+        m_data = other.m_data;
+        m_length = other.m_length;
+
+        // Nullify other to prevent releasing resource transferred
+        other.m_data = nullptr;
+        other.ref = nullptr;
+        other.m_length = 0;
+    }
+
+    return *this;
 }
 
 MemBlock::~MemBlock() {

@@ -12,12 +12,11 @@ int main(int argc, char* argv[]) {
 
     queue_store store;
 
-    for (int i = 0; i < 1024; i++) {
+    for (int i = 0; i < 16; i++) {
         string slogan = string("abc") + to_string(i);
         char* data = new char[slogan.size() + 1];
         strcpy(data, slogan.c_str());
         MemBlock msg(data, strlen(data));
-        cout << msg[3] << endl;
         store.put("Queue-1", msg);
     }
 

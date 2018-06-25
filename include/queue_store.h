@@ -23,6 +23,12 @@ namespace race2018 {
 
         MemBlock(const MemBlock& other);
 
+        MemBlock(MemBlock&& other) noexcept;
+
+        MemBlock& operator=(const MemBlock& other);
+
+        MemBlock& operator=(MemBlock&& other) noexcept ;
+
         size_t length() const {
             return m_length;
         }
