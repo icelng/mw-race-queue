@@ -33,5 +33,9 @@ vector<MemBlock> queue_store::get(std::string queue_name, long offset, long numb
         return vector<MemBlock>();
     }
     auto queue = queue_map[queue_name];
+    if (offset >= queue.size()) {
+        return vector<MemBlock>();
+    }
+
     return vector<MemBlock>(queue.begin() + offset, queue.begin() + offset + number);
 }
