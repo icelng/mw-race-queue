@@ -25,10 +25,7 @@ add_library(queue_race SHARED ${SOURCE_FILES})
 # In case you need lz
 #target_link_libraries(queue_race z)
 
-option(BUILD_EXAMPLE ON)
-if(${BUILD_EXAMPLE})
-    add_subdirectory(example)
-endif()
+add_subdirectory(example)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
         DESTINATION include)

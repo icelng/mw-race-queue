@@ -8,52 +8,35 @@
 #include <mutex>
 #include <atomic>
 
+// Please keep this namespace intact.
 namespace race2018 {
 
-    // Assume that data is allocated by new char[]
-    class MemBlock {
-    public:
-        MemBlock(const char* data, size_t length) :
-                m_data(data),
-                m_length(length),
-                ref(new std::atomic_int(1)) {
-        }
+    struct MemBlock {
+        /**
+         * Pointer to the data
+         */
+        void* ptr;
 
-        virtual ~MemBlock();
-
-        MemBlock(const MemBlock& other);
-
-        MemBlock(MemBlock&& other) noexcept;
-
-        MemBlock& operator=(const MemBlock& other);
-
-        MemBlock& operator=(MemBlock&& other) noexcept ;
-
-        size_t length() const {
-            return m_length;
-        }
-
-        std::string to_string() const {
-            return std::string(m_data, m_length);
-        }
-
-        char operator[](int index) const {
-            return *(m_data + index);
-        }
-
-        const char* data() const {
-            return m_data;
-        }
-
-    private:
-        const char* m_data;
-        size_t m_length;
-        std::atomic_int* ref;
+        /**
+         * Length of the data in bytes
+         */
+        size_t size;
     };
 
     class queue_store {
     public:
+
         /**
+         * Default constructor is REQUIRED and will be used to initialize your implementation. You may modify it but
+         * please make sure it exists.
+         */
+        queue_store() {
+
+        }
+
+        /**
+         * Note: Competitors need to implement this function and it will be called concurrently.
+         *
          * 把一条消息写入一个队列；
          * 这个接口需要是线程安全的，也即评测程序会并发调用该接口进行put；
          * 每个queue中的内容，按发送顺序存储消息（可以理解为Java中的List），同时每个消息会有一个索引，索引从0开始；
@@ -64,6 +47,8 @@ namespace race2018 {
         void put(std::string queue_name, const MemBlock& message);
 
         /**
+         * Note: Competitors need to implement this function and it will be called concurrently.
+         *
          * 从一个队列中读出一批消息，读出的消息要按照发送顺序来；
          * 这个接口需要是线程安全的，也即评测程序会并发调用该接口进行get；
          * 返回的vector会被并发读，但不涉及写，因此只需要是线程读安全就可以了；
@@ -74,8 +59,15 @@ namespace race2018 {
         std::vector<MemBlock> get(std::string queue_name, long offset, long number);
 
     private:
+
+        /**
+         * This field is used for demonstration purpose only. You may remove it.
+         */
         std::unordered_map<std::string, std::vector<MemBlock>> queue_map;
 
+        /**
+         * This field is used for demonstration purpose only. You may remove it.
+         */
         std::mutex mtx;
     };
 }

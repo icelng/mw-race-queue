@@ -1,6 +1,5 @@
 #include <iostream>
 #include <cstring>
-#include <boost/filesystem.hpp>
 #include "queue_store.h"
 
 using namespace std;
@@ -16,14 +15,18 @@ int main(int argc, char* argv[]) {
         string slogan = string("abc") + to_string(i);
         char* data = new char[slogan.size() + 1];
         strcpy(data, slogan.c_str());
-        MemBlock msg(data, strlen(data));
+        MemBlock msg = {static_cast<void*>(data),
+                        static_cast<size_t>(slogan.size())
+        };
+
         store.put("Queue-1", msg);
     }
 
     vector<MemBlock> list = store.get("Queue-1", 10, 10);
 
     for (MemBlock &item : list) {
-        cout << item.to_string() << endl;
+        char* msg = static_cast<char *>(item.ptr);
+        cout << msg << endl;
     }
 
     return 0;
