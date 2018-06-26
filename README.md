@@ -8,6 +8,7 @@
 1. Snappy 1.1.0
 1. Lzma(xz-devel)   0.5.beta.20091007git.el6
 1. lz4 r131
+1. TBB 3.20090809.el6
 
 ## How to build
 
