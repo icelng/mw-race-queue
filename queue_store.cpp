@@ -90,5 +90,6 @@ vector<MemBlock> queue_store::get(std::string queue_name, long offset, long numb
         return vector<MemBlock>();
     }
 
-    return vector<MemBlock>(queue.begin() + offset, queue.begin() + offset + number);
+    return vector<MemBlock>(queue.begin() + offset,
+                            offset + number > queue.size() ? queue.end() : queue.begin() + offset + number);
 }

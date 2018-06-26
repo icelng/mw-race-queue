@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
         store.put("Queue-1", msg);
     }
 
-    vector<MemBlock> list = store.get("Queue-1", 10, 5);
+    vector<MemBlock> list = store.get("Queue-1", 10, 10);
 
     for (MemBlock &item : list) {
         cout << item.to_string() << endl;
