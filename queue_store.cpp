@@ -1,4 +1,5 @@
 #include "queue_store.h"
+#include <cstring>
 
 using namespace std;
 using namespace race2018;
