@@ -24,6 +24,18 @@ vector<MemBlock> queue_store::get(std::string queue_name, long offset, long numb
         return vector<MemBlock>();
     }
 
-    return vector<MemBlock>(queue.begin() + offset,
+    vector<MemBlock> searchResult(queue.begin() + offset,
                             offset + number > queue.size() ? queue.end() : queue.begin() + offset + number);
+
+    // Return deep copy of the MemBlock such that benchmark tool may release MemBlock::ptr safely.
+    vector<MemBlock> ret;
+    for (const auto &item : searchResult) {
+        MemBlock block;
+        block.size = item.size;
+        block.ptr = new char[block.size];
+        memcpy(block.ptr, item.ptr, block.size);
+        ret.push_back(block);
+    }
+
+    return ret;
 }
