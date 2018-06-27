@@ -13,7 +13,7 @@ namespace race2018 {
 
     struct MemBlock {
         /**
-         * Pointer to the data
+         * Pointer to the data. ptr is allocated by new char[LENGTH]
          */
         void* ptr;
 
@@ -35,7 +35,8 @@ namespace race2018 {
         }
 
         /**
-         * Note: Competitors need to implement this function and it will be called concurrently.
+         * Note: Competitors need to implement this function and it will be called concurrently. It's your responsible
+         * to delete[] message.ptr after storing.
          *
          * 把一条消息写入一个队列；
          * 这个接口需要是线程安全的，也即评测程序会并发调用该接口进行put；
@@ -47,7 +48,8 @@ namespace race2018 {
         void put(std::string queue_name, const MemBlock& message);
 
         /**
-         * Note: Competitors need to implement this function and it will be called concurrently.
+         * Note: Competitors need to implement this function and it will be called concurrently. Benchmark code will
+         * delete[] each of MemBlock::ptr.
          *
          * 从一个队列中读出一批消息，读出的消息要按照发送顺序来；
          * 这个接口需要是线程安全的，也即评测程序会并发调用该接口进行get；
