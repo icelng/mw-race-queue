@@ -7,7 +7,7 @@ using namespace race2018;
 /**
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
-void queue_store::put(string queue_name, const MemBlock& message) {
+void queue_store::put(const string& queue_name, const MemBlock& message) {
     lock_guard<mutex> lock(mtx);
     queue_map[queue_name].push_back(message);
 }
@@ -15,7 +15,7 @@ void queue_store::put(string queue_name, const MemBlock& message) {
 /**
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
-vector<MemBlock> queue_store::get(std::string queue_name, long offset, long number) {
+vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, long number) {
     lock_guard<mutex> lock(mtx);
     if (queue_map.find(queue_name) == queue_map.end()) {
         return vector<MemBlock>();

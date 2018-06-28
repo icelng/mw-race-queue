@@ -45,7 +45,7 @@ namespace race2018 {
          * @param queue_name 代表queue名字，如果是第一次put，则自动生产一个queue
          * @param message message，代表消息的内容，评测时内容会随机产生，大部分长度在64字节左右，会有少量消息在1k左右
          */
-        void put(std::string queue_name, const MemBlock& message);
+        void put(const std::string& queue_name, const MemBlock& message);
 
         /**
          * Note: Competitors need to implement this function and it will be called concurrently. Benchmark code will
@@ -58,7 +58,7 @@ namespace race2018 {
          * @param offset 代表消息的在这个队列中的起始消息索引
          * @param num 代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可;没有消息了，则返回一个空的集合
          */
-        std::vector<MemBlock> get(std::string queue_name, long offset, long number);
+        std::vector<MemBlock> get(const std::string& queue_name, long offset, long number);
 
     private:
 
