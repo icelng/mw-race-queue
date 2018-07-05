@@ -3,8 +3,12 @@
 //
 
 #include "message_queue.h"
+#include "store_io.h"
+#include "idle_page_manager.h"
+#include "commit_service.h"
 
 using namespace std;
+using namespace race2018;
 
 #define MSG_HEAD_SIZE 2
 #define INITIAL_PAGE_TABLE_LEN 32

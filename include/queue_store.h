@@ -6,10 +6,12 @@
 #include <vector>
 #include <mutex>
 #include <atomic>
-#include "store_io.h"
 #include "tbb/concurrent_hash_map.h"
-#include "message_queue.h"
 
+class MessageQueue;
+class StoreIO;
+class IdlePageManager;
+class CommitService;
 
 // Please keep this namespace intact.
 namespace race2018 {
@@ -33,9 +35,7 @@ namespace race2018 {
          * Default constructor is REQUIRED and will be used to initialize your implementation. You may modify it but
          * please make sure it exists.
          */
-        queue_store() {
-
-        }
+        queue_store();
 
         /**
          * Note: Competitors need to implement this function and it will be called concurrently. It's your responsible

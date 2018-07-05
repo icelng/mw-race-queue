@@ -7,14 +7,18 @@
 
 #include <vector>
 #include "unistd.h"
-#include "idle_page_manager.h"
-#include "store_io.h"
-#include "queue_store.h"
-#include "commit_service.h"
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include "tbb/concurrent_queue.h"
+#include "semaphore.h"
+#include "queue_store.h"
 
+class StoreIO;
+class IdlePageManager;
+class CommitService;
+
+using namespace race2018;
 
 class MessageQueue {
 public:

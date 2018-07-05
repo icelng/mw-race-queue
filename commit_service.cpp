@@ -4,6 +4,7 @@
 
 
 #include "commit_service.h"
+#include "message_queue.h"
 #include "pthread.h"
 #include <iostream>
 

@@ -13,6 +13,9 @@ using namespace race2018;
 
 #include "commit_service.h"
 #include "idle_page_manager.h"
+#include "message_queue.h"
+#include "store_io.h"
+#include "message_queue.h"
 
 queue_store::queue_store() {
     store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
