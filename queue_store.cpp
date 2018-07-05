@@ -4,39 +4,51 @@
 using namespace std;
 using namespace race2018;
 
+#define FILE_SIZE_1G (1 * 1024 * 1024 * 1024L)
+#define FILE_SIZE_2G (2 * FILE_SIZE_1G)
+#define FILE_SIZE_4G (4 * FILE_SIZE_1G)
+#define FILE_SIZE_200G (200 * FILE_SIZE_1G)
+#define REGION_SIZE (1024 * 1024 * 1024)
+#define FILE_SIZE FILE_SIZE_1G
+
+#include "commit_service.h"
+#include "idle_page_manager.h"
+
+queue_store::queue_store() {
+    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
+    idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
+    commit_service = new CommitService(8);
+    commit_service->start();
+}
+
 /**
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
 void queue_store::put(const string& queue_name, const MemBlock& message) {
-    lock_guard<mutex> lock(mtx);
-    queue_map[queue_name].push_back(message);
+    tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
+    MessageQueue *message_queue;
+
+    if (queue_map.insert(a, queue_name)) {
+        message_queue = new MessageQueue(idle_page_manager, store_io, commit_service);
+        a->second = message_queue;
+    }
+
+    message_queue = a->second;
+    message_queue->put(message);
 }
 
 /**
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
 vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, long number) {
-    lock_guard<mutex> lock(mtx);
-    if (queue_map.find(queue_name) == queue_map.end()) {
+    tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
+    MessageQueue *message_queue;
+
+    if (!queue_map.find(a, queue_name)) {
         return vector<MemBlock>();
     }
-    auto queue = queue_map[queue_name];
-    if (offset >= queue.size()) {
-        return vector<MemBlock>();
-    }
 
-    vector<MemBlock> searchResult(queue.begin() + offset,
-                            offset + number > queue.size() ? queue.end() : queue.begin() + offset + number);
+    message_queue = a->second;
 
-    // Return deep copy of the MemBlock such that benchmark tool may release MemBlock::ptr safely.
-    vector<MemBlock> ret;
-    for (const auto &item : searchResult) {
-        MemBlock block;
-        block.size = item.size;
-        block.ptr = new char[block.size];
-        memcpy(block.ptr, item.ptr, block.size);
-        ret.push_back(block);
-    }
-
-    return ret;
+    return message_queue->get(offset, number);
 }

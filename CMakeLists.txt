@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-set(SOURCE_FILES queue_store.cpp)
+set(SOURCE_FILES queue_store.cpp include/store_io.h store_io.cpp include/message_queue.h message_queue.cpp include/idle_page_manager.h idle_page_manager.cpp include/commit_service.h commit_service.cpp)
 
 add_library(queue_race SHARED ${SOURCE_FILES})
 
@@ -24,6 +24,8 @@ add_library(queue_race SHARED ${SOURCE_FILES})
 
 # In case you need lz
 #target_link_libraries(queue_race z)
+
+target_link_libraries(queue_race tbb)
 
 add_subdirectory(example)
 

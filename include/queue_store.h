@@ -4,9 +4,12 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <unordered_map>
 #include <mutex>
 #include <atomic>
+#include "store_io.h"
+#include "tbb/concurrent_hash_map.h"
+#include "message_queue.h"
+
 
 // Please keep this namespace intact.
 namespace race2018 {
@@ -65,12 +68,11 @@ namespace race2018 {
         /**
          * This field is used for demonstration purpose only. You may remove it.
          */
-        std::unordered_map<std::string, std::vector<MemBlock>> queue_map;
+        tbb::concurrent_hash_map<std::string, MessageQueue*> queue_map;
+        StoreIO *store_io;
+        IdlePageManager *idle_page_manager;
+        CommitService *commit_service;
 
-        /**
-         * This field is used for demonstration purpose only. You may remove it.
-         */
-        std::mutex mtx;
     };
 }
 
