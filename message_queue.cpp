@@ -74,6 +74,9 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
         u_int64_t msg_page_phy_address = page_table[cur_page_index * 2];
         read_num = std::min(page_table[cur_page_index * 2 + 1] - (start_msg_index + i), adjust_num - i);
+        if (read_num <= 0) {
+            cout << "Read num = 0?ha?" << endl;
+        }
         void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
         void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
         u_int64_t start_index_in_page = cur_page_index == 0 ?
@@ -94,6 +97,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             ret.push_back(block);
         }
 
+        cur_page_index ++;
     }
 
     return ret;
