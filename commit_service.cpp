@@ -32,6 +32,7 @@ void CommitService::start() {
         return;
     }
 
+    cout << "Starting commit service...." << endl;
     for (int i = 0;i < thread_num;i++) {
         pthread_t tid;
         pthread_create(&tid, NULL, service, this);

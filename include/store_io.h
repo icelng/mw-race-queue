@@ -9,7 +9,7 @@
 
 class StoreIO {
 public:
-    StoreIO(const char *file_path, u_int64_t file_size, u_int32_t region_size);
+    StoreIO(const char *file_path, u_int64_t file_size, u_int64_t region_size);
 
     void* get_region(u_int64_t addr);
     u_int32_t region_mask;

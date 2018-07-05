@@ -35,7 +35,7 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
     is_need_commit = true;
 
     /*判断是否攒够一页, 如果是, 则commit*/
-    if (need_commit_size + mem_block.size + MSG_HEAD_SIZE> idle_page_manager->get_page_size()) {
+    if ((need_commit_size + mem_block.size + MSG_HEAD_SIZE) >= idle_page_manager->get_page_size()) {
 
         if (last_page_index + 1 >= page_table_len) {
             expend_page_table();
@@ -65,6 +65,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         return ret;
     }
 
+//    cout << "commit now" << endl;
     commit_now();
 
     u_int32_t cur_page_index = find_page_index(start_msg_index);
@@ -86,6 +87,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             read_offset += MSG_HEAD_SIZE;
             void* msg_buf = malloc(msg_size);
             memcpy(msg_buf, read_start_ptr + read_offset, msg_size);
+//            cout << "Get msg:" << (char *)msg_buf << endl;
+            read_offset += msg_size;
             block.size = msg_size;
             block.ptr = msg_buf;
             ret.push_back(block);
@@ -112,12 +115,16 @@ void MessageQueue::do_commit() {
     idle_page_mem_ptr = mapped_region_ptr + (idle_page_phy_address & store_io->region_mask);
     write_offset = 0;
 
+//    cout << "idle_page_phy_address:" << idle_page_phy_address << ", mapped_region_ptr:" << mapped_region_ptr << ", idle_page_mem_ptr:" << idle_page_mem_ptr << endl;
+
     for (int i = 0;i < commit_msg_num;i++) {
 
         if (!msg_put_queue.try_pop(mem_block)) {
             cout << "Failed to pop mem_block when doing commit!!" << endl;
             continue;
         }
+
+//        cout << "Commit msg:" << (char *)mem_block.ptr << endl;
 
         size_t msg_size = mem_block.size;
         shortToBytes(static_cast<unsigned short>(msg_size), msg_head, 0);
@@ -126,12 +133,17 @@ void MessageQueue::do_commit() {
         memcpy(idle_page_mem_ptr + write_offset, mem_block.ptr, msg_size);
         write_offset += msg_size;
 
+        if (write_offset >= idle_page_manager->get_page_size()) {
+            cout << "Out of page memory when committing!" << endl;
+        }
+
         free(mem_block.ptr);
 
     }
 
     page_table[committing_page_index * 2] = idle_page_phy_address;
 
+//    cout << "committed successfully!" << endl;
     sem_post(&commit_sem_lock);
 }
 

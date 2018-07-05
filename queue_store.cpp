@@ -8,8 +8,8 @@ using namespace race2018;
 #define FILE_SIZE_2G (2 * FILE_SIZE_1G)
 #define FILE_SIZE_4G (4 * FILE_SIZE_1G)
 #define FILE_SIZE_200G (200 * FILE_SIZE_1G)
-#define REGION_SIZE (1024 * 1024 * 1024)
-#define FILE_SIZE FILE_SIZE_1G
+#define REGION_SIZE (1024 * 1024 * 1024L)
+#define FILE_SIZE FILE_SIZE_2G
 
 #include "commit_service.h"
 #include "idle_page_manager.h"
@@ -47,6 +47,7 @@ vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, lo
     tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
     MessageQueue *message_queue;
 
+//    cout << "Find queue" << endl;
     if (!queue_map.find(a, queue_name)) {
         return vector<MemBlock>();
     }

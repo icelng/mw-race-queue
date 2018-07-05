@@ -7,10 +7,12 @@
 #include "store_io.h"
 #include "sys/mman.h"
 #include <iostream>
+#include <cerrno>
+#include <cstring>
 
 using namespace std;
 
-StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int32_t region_size) {
+StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_size) {
     int fd = 0;
 
     region_size--;
@@ -25,14 +27,23 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int32_t region_si
 
     if (access(file_path, F_OK) != -1) {
         /*文件存在则删除*/
+        cout << "Delete existed log-file" << endl;
         unlink(file_path);
     }
 
-    fd = open(file_path, O_RDWR);
+    cout << "Open log-file" << endl;
+    fd = open(file_path, O_RDWR | O_CREAT);
+    ftruncate(fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
     for (int i = 0;i < regions_num;i++) {
-        regions[i] = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, i * region_size);
+        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, i * this->region_size);
+        if (regions[i] == reinterpret_cast<void *>(-1)) {
+            cout << "Failed to map file!!!" << strerror(errno) << endl;
+            cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
+        }
     }
+
+    cout << "Mapped file successfully!" << endl;
 
 }
 

@@ -24,6 +24,7 @@ add_library(queue_race SHARED ${SOURCE_FILES})
 
 # In case you need lz
 #target_link_libraries(queue_race z)
+target_link_libraries(queue_race pthread)
 
 target_link_libraries(queue_race tbb)
 

@@ -1,4 +1,4 @@
-add_executable(sample main.cpp)
+add_executable(sample main4.cpp main.cpp)
 
 target_link_libraries(sample queue_race boost_filesystem boost_system)
 
