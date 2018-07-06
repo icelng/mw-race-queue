@@ -17,12 +17,13 @@
 class StoreIO;
 class IdlePageManager;
 class CommitService;
+class BufferPool;
 
 using namespace race2018;
 
 class MessageQueue {
 public:
-    MessageQueue(IdlePageManager *idlePageManager, StoreIO *store_io, CommitService *commit_service);
+    MessageQueue(IdlePageManager *idlePageManager, StoreIO *store_io, CommitService *commit_service, BufferPool *buffer_pool);
     void put(const race2018::MemBlock &mem_block);
     std::vector<race2018::MemBlock> get(long offset, long number);
     void do_commit();
@@ -40,17 +41,26 @@ private:
     IdlePageManager *idle_page_manager;
     StoreIO *store_io;
     CommitService *commit_service;
+    BufferPool *buffer_pool;
     size_t queue_len;
     bool is_need_commit;
     u_int32_t last_page_index;
     u_int32_t committing_page_index;
     sem_t commit_sem_lock;
-    size_t commit_msg_num;
-    u_int32_t need_commit_size;
+    size_t committing_size;
+    size_t need_commit_size;
     u_int64_t *page_table;
     size_t page_table_len;
-    tbb::concurrent_queue<race2018::MemBlock> msg_put_queue;
+    void** commit_buffer_queue;
+    std::atomic<long> commit_q_head;
+    std::atomic<long> commit_q_tail;
+    size_t max_commit_q_len;
+//    tbb::concurrent_queue<void*> commit_buffer_queue;
+    void* put_buffer;
+    u_int32_t put_buffer_offset;
+    size_t buffer_size;
     std::mutex mtx;
+    std::atomic<int> hold_buffers_num;
 };
 
 #endif //QUEUE_RACE_MESSAGE_QUEUE_H

@@ -7,7 +7,7 @@ using namespace race2018;
 
 
 
-int main4(int argc, char* argv[]) {
+int main2(int argc, char* argv[]) {
 
     queue_store store;
 

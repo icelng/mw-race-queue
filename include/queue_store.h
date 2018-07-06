@@ -12,6 +12,7 @@ class MessageQueue;
 class StoreIO;
 class IdlePageManager;
 class CommitService;
+class BufferPool;
 
 // Please keep this namespace intact.
 namespace race2018 {
@@ -72,6 +73,7 @@ namespace race2018 {
         StoreIO *store_io;
         IdlePageManager *idle_page_manager;
         CommitService *commit_service;
+        BufferPool *buffer_pool;
 
     };
 }

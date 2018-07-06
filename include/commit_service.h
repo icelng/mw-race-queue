@@ -5,8 +5,8 @@
 #ifndef QUEUE_RACE_COMMIT_SERVICE_H
 #define QUEUE_RACE_COMMIT_SERVICE_H
 
-#include "semaphore.h"
 #include "tbb/concurrent_queue.h"
+#include "semaphore.h"
 
 class MessageQueue;
 

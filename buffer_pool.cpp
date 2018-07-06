@@ -1,0 +1,68 @@
+//
+// Created by yiran on 18-7-6.
+//
+
+#include "buffer_pool.h"
+#include "malloc.h"
+#include <iostream>
+#include <cstring>
+#include "unistd.h"
+
+using namespace std;
+
+void *buffer_monitor(void* arg) {
+    BufferPool *buffer_pool = static_cast<BufferPool *>(arg);
+    while (true) {
+        sleep(1);
+        cout << "-----Remain buffers num:" << buffer_pool->get_remain_buffers_num() << endl;
+    }
+
+}
+
+BufferPool::BufferPool(u_int32_t pool_size, u_int32_t buffer_size) {
+    this->buffer_size = buffer_size;
+    this->max_queue_length = pool_size + 1;
+    this->head = 0;
+    this->tail = pool_size;
+    void* start = malloc(pool_size * buffer_size);
+    this->buffers = (void **) malloc(max_queue_length * sizeof(void *));
+
+
+    for (int i = 0;i < pool_size;i++) {
+        buffers[i] = start + buffer_size * i;
+        memset(buffers[i], 0, buffer_size);
+    }
+
+//    sleep(100);
+
+    sem_init(&remain_buffer_num, 0, pool_size);
+
+    cout << ((pool_size * (u_int64_t) buffer_size) >> 20) << "M buffer have been allocated!" << endl;
+
+    pthread_t tid;
+    pthread_create(&tid, NULL, buffer_monitor, this);
+
+}
+
+
+void *BufferPool::borrow_buffer() {
+    sem_wait(&this->remain_buffer_num);
+    return buffers[head++%max_queue_length];
+}
+
+void BufferPool::return_buffer(void *buffer) {
+    buffers[tail++%max_queue_length] = buffer;
+    sem_post(&this->remain_buffer_num);
+    int i;
+    sem_getvalue(&remain_buffer_num, &i);
+}
+
+u_int32_t BufferPool::get_buffer_size() {
+    return buffer_size;
+}
+
+int BufferPool::get_remain_buffers_num() {
+    int num;
+    sem_getvalue(&remain_buffer_num, &num);
+    return num;
+}
