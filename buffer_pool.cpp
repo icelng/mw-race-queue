@@ -59,8 +59,6 @@ void BufferPool::return_buffer(void *buffer) {
     buffers[tail++%max_queue_length] = buffer;
     pthread_spin_unlock(&spinlock);
     sem_post(&this->remain_buffer_num);
-    int i;
-    sem_getvalue(&remain_buffer_num, &i);
 }
 
 u_int32_t BufferPool::get_buffer_size() {

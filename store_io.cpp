@@ -40,8 +40,8 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
         if (regions[i] == reinterpret_cast<void *>(-1)) {
             cout << "Failed to map file!!!" << strerror(errno) << endl;
         }
-        printf("mapped region:0x%x, phy_address:0x%x, region_size:%dM", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
-        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
+        printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
+//        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
     }
     printf("Mapped region_mask:0x%x\n", region_mask);
 

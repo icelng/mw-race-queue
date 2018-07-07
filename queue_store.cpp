@@ -21,8 +21,8 @@ using namespace race2018;
 queue_store::queue_store() {
     store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
     idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
-    buffer_pool = new BufferPool(10000000, 512);
-//    buffer_pool = new BufferPool(80000, 512);
+//    buffer_pool = new BufferPool(10000000, 512);
+    buffer_pool = new BufferPool(8000000, 512);
     commit_service = new CommitService(2);
     commit_service->start();
 }

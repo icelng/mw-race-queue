@@ -55,8 +55,8 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
             expend_page_table();
         }
 
-//        commit_later();
-        commit_now();
+        commit_later();
+//        commit_now();
 //        cout << "commit buffer queue size:" << commit_buffer_queue.unsafe_size() << endl;
 //        cout << "hold buffers num:" << hold_buffers_num << endl;
         put_buffer = buffer_pool->borrow_buffer();
