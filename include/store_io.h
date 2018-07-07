@@ -6,6 +6,7 @@
 #define QUEUE_RACE_STORE_IO_H
 
 
+#include <mutex>
 
 class StoreIO {
 public:
@@ -19,6 +20,10 @@ private:
     u_int32_t region_bits_len;
     u_int32_t region_size;
     u_int32_t regions_num;
+    u_int32_t region_no_now;
+    int file_fd;
+    void* region_ptr_now;
+    std::mutex mutex;
 };
 
 #endif //QUEUE_RACE_STORE_IO_H

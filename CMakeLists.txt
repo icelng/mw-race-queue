@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(queue_race)
 
 set(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_FLAGS "-pg")
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 

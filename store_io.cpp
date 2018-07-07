@@ -13,7 +13,6 @@
 using namespace std;
 
 StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_size) {
-    int fd = 0;
 
     region_size--;
     region_bits_len = 0;
@@ -32,17 +31,19 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
     }
 
     cout << "Open log-file" << endl;
-    fd = open(file_path, O_RDWR | O_CREAT);
-    ftruncate(fd, file_size);
+    file_fd = open(file_path, O_RDWR | O_CREAT);
+    ftruncate(file_fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
-    for (int i = 0;i < regions_num;i++) {
-        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (long) i * this->region_size);
-        if (regions[i] == reinterpret_cast<void *>(-1)) {
-            cout << "Failed to map file!!!" << strerror(errno) << endl;
-        }
-        printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
+//    for (int i = 0;i < regions_num;i++) {
+//        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, (long) i * this->region_size);
+//        if (regions[i] == reinterpret_cast<void *>(-1)) {
+//            cout << "Failed to map file!!!" << strerror(errno) << endl;
+//        }
+//        printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
 //        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
-    }
+//    }
+    region_ptr_now = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, file_fd, (long) 0);
+    region_no_now = 0;
     printf("Mapped region_mask:0x%x\n", region_mask);
 
     cout << "Mapped file successfully!" << endl;
@@ -56,5 +57,15 @@ void* StoreIO::get_region(u_int64_t addr) {
         cout << "Illegal address when get_region!" << endl;
     }
 
-    return regions[region_no];
+    {
+        lock_guard<std::mutex> lock(mutex);
+        if (region_no != region_no_now) {
+            munmap(region_ptr_now, region_size);
+            region_ptr_now = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, file_fd, region_no * region_size);
+            region_no_now = region_no;
+        }
+
+    }
+
+    return region_ptr_now;
 }
