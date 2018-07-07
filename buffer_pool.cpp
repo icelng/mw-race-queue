@@ -26,6 +26,7 @@ BufferPool::BufferPool(u_int32_t pool_size, u_int32_t buffer_size) {
     this->tail = pool_size;
     void* start = malloc(pool_size * buffer_size);
     this->buffers = (void **) malloc(max_queue_length * sizeof(void *));
+    pthread_spin_init(&spinlock, 0);
 
 
     for (int i = 0;i < pool_size;i++) {
@@ -47,11 +48,16 @@ BufferPool::BufferPool(u_int32_t pool_size, u_int32_t buffer_size) {
 
 void *BufferPool::borrow_buffer() {
     sem_wait(&this->remain_buffer_num);
-    return buffers[head++%max_queue_length];
+    pthread_spin_lock(&spinlock);
+    void* buffer = buffers[head++%max_queue_length];
+    pthread_spin_unlock(&spinlock);
+    return buffer;
 }
 
 void BufferPool::return_buffer(void *buffer) {
+    pthread_spin_lock(&spinlock);
     buffers[tail++%max_queue_length] = buffer;
+    pthread_spin_unlock(&spinlock);
     sem_post(&this->remain_buffer_num);
     int i;
     sem_getvalue(&remain_buffer_num, &i);

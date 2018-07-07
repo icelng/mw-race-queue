@@ -57,7 +57,7 @@ private:
     size_t max_commit_q_len;
 //    tbb::concurrent_queue<void*> commit_buffer_queue;
     void* put_buffer;
-    u_int32_t put_buffer_offset;
+    u_int64_t put_buffer_offset;
     size_t buffer_size;
     std::mutex mtx;
     std::atomic<int> hold_buffers_num;

@@ -24,6 +24,7 @@ private:
     size_t max_queue_length;
     std::atomic<long> head;
     std::atomic<long> tail;
+    pthread_spinlock_t spinlock;
 //    tbb::concurrent_queue<void*> buffers;
 };
 

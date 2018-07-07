@@ -21,8 +21,9 @@ using namespace race2018;
 queue_store::queue_store() {
     store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
     idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
-    buffer_pool = new BufferPool(4000000, 1024);
-    commit_service = new CommitService(8);
+    buffer_pool = new BufferPool(10000000, 512);
+//    buffer_pool = new BufferPool(80000, 512);
+    commit_service = new CommitService(2);
     commit_service->start();
 }
 
@@ -30,15 +31,17 @@ queue_store::queue_store() {
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
 void queue_store::put(const string& queue_name, const MemBlock& message) {
-    tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
     MessageQueue *message_queue;
 
-    if (queue_map.insert(a, queue_name)) {
-        message_queue = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
-        a->second = message_queue;
+    {
+        tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
+        if (queue_map.insert(a, queue_name)) {
+            message_queue = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
+            a->second = message_queue;
+        }
+        message_queue = a->second;
     }
 
-    message_queue = a->second;
     message_queue->put(message);
 }
 
@@ -46,15 +49,16 @@ void queue_store::put(const string& queue_name, const MemBlock& message) {
  * This in-memory implementation is for demonstration purpose only. You are supposed to modify it.
  */
 vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, long number) {
-    tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
     MessageQueue *message_queue;
 
 //    cout << "Find queue" << endl;
-    if (!queue_map.find(a, queue_name)) {
-        return vector<MemBlock>();
+    {
+        tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
+        if (!queue_map.find(a, queue_name)) {
+            return vector<MemBlock>();
+        }
+        message_queue = a->second;
     }
-
-    message_queue = a->second;
 
     return message_queue->get(offset, number);
 }

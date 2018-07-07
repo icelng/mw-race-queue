@@ -36,12 +36,14 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
     ftruncate(fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
     for (int i = 0;i < regions_num;i++) {
-        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, i * this->region_size);
+        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (long) i * this->region_size);
         if (regions[i] == reinterpret_cast<void *>(-1)) {
             cout << "Failed to map file!!!" << strerror(errno) << endl;
-            cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
         }
+        printf("mapped region:0x%x, phy_address:0x%x, region_size:%dM", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
+        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
     }
+    printf("Mapped region_mask:0x%x\n", region_mask);
 
     cout << "Mapped file successfully!" << endl;
 

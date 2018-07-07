@@ -65,9 +65,13 @@ void produce(queue_store& queueStore, int number,
 //            queueCounter[queueName].fetch_add(1);
             std::string msg_string = std::to_string(queueCounter[queueName].fetch_add(1));
             const char* msg = msg_string.c_str();
-            memBlock.size = strlen(msg) + 1;
+            size_t msg_size = strlen(msg);
+            memBlock.size = msg_size * 20 + 1;
             memBlock.ptr = malloc(memBlock.size);
-            strcpy(static_cast<char *>(memBlock.ptr), msg);
+            for (int k = 0;k < 20;k++) {
+                memcpy(memBlock.ptr + (msg_size * k), msg, msg_size);
+//                strcpy(static_cast<char *>(memBlock.ptr + ), msg);
+            }
             queueStore.put(queueName, memBlock);
         }
     }
@@ -85,6 +89,14 @@ void checkIndex(queue_store& queueStore, int number,
         if (index < 0) index = 0;
         std::vector<MemBlock> msgs = queueStore.get(queueName, index, 10);
         for (auto const& msg : msgs) {
+            int msg_int = index;
+            int msg_len = 1;
+            msg_int = msg_int / 10;
+            while (msg_int != 0) {
+                msg_len++;
+                msg_int = msg_int / 10;
+            }
+            ((char *)msg.ptr)[msg_len] = 0;
 //            index++;
 //            if (strcmp(MSG, static_cast<const char *>(msg.ptr)) != 0) {
             if (strcmp(std::to_string(index++).c_str(), static_cast<const char *>(msg.ptr)) != 0) {
@@ -144,11 +156,19 @@ void consume(queue_store& queueStore, int number,
         auto& queueName = p.first;
         while (std::chrono::high_resolution_clock::now() <= maxTimeStamp) {
             int index = p.second;
-            std::cout << "---------getting msg" << std::endl;
+//            std::cout << "---------getting msg" << std::endl;
             std::vector<MemBlock> msgs = queueStore.get(queueName, index, 10);
             if (!msgs.empty()) {
                 pullOffsets[queueName].fetch_add(static_cast<int>(msgs.size()));
                 for (auto const& msg : msgs) {
+                    int msg_int = index;
+                    int msg_len = 1;
+                    msg_int = msg_int / 10;
+                    while (msg_int != 0) {
+                        msg_len++;
+                        msg_int = msg_int / 10;
+                    }
+                    ((char *)msg.ptr)[msg_len] = 0;
 //                    index++;
 //                    if (strcmp(MSG, static_cast<const char *>(msg.ptr)) != 0) {
                     if (strcmp(std::to_string(index++).c_str(), static_cast<const char *>(msg.ptr)) != 0) {
@@ -166,7 +186,7 @@ void consume(queue_store& queueStore, int number,
                 }
                 break;
             }
-            std::cout << "consumer accept!" << counter << std::endl;
+//            std::cout << "consumer accept!" << counter << std::endl;
         }
     }
 }
@@ -175,18 +195,18 @@ int main(int argc, char* argv[])
 {
     //评测相关配置
     //发送阶段的发送数量，也即发送阶段必须要在规定时间内把这些消息发送完毕方可
-    int msgNum  = 20000000;
+    int msgNum  = 200000000;
 //    int msgNum  = 2000000000;
     //发送阶段的最大持续时间，也即在该时间内，如果消息依然没有发送完毕，则退出评测
     int sendTime = 30 * 60 * 1000;
     //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测
     int checkTime = 30 * 60 * 1000;
     //队列的数量
-    int queueNum = 10000;
+    int queueNum = 100000;
     //正确性检测的次数
-    int checkNum = static_cast<int>(queueNum * 0.2);
+    int checkNum = static_cast<int>(queueNum * 1.5);
     //消费阶段的总队列数量
-    int checkQueueNum = static_cast<int>(msgNum * 0.2);
+    int checkQueueNum = static_cast<int>(queueNum * 0.2);
     //发送的线程数量
     int sendTsNum = 10;
     //消费的线程数量
@@ -246,7 +266,7 @@ int main(int argc, char* argv[])
     std::atomic_long checkCounter{0};
     std::vector<std::unordered_map<std::string, int>> offsetses;
     std::vector<std::unique_ptr<std::thread>> checks;
-    std::cout << "start comsumer" << std::endl;
+    std::cout << "Preparing start consumer" << std::endl;
     for (int i = 0; i < sendTsNum; ++i) {
         int eachCheckQueueNum = checkQueueNum / checkTsNum;
         std::unordered_map<std::string, int> offsets;
@@ -259,11 +279,13 @@ int main(int argc, char* argv[])
         }
         offsetses.push_back(offsets);
     }
+    std::cout << "Starting done!" << std::endl;
     for (int i = 0; i < sendTsNum; ++i) {
         std::unique_ptr<std::thread> th(new std::thread(consume, std::ref(queueStore), i, std::ref(maxCheckTime),
                                                         std::ref(checkCounter), std::ref(offsetses[i])));
         checks.push_back(std::move(th));
     }
+    std::cout << "Consumer started done!" << std::endl;
     for (auto& th : checks) {
         th->join();
     }
