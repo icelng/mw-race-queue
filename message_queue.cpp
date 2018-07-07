@@ -36,6 +36,8 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
     commit_q_head = 0;
     commit_q_tail = 0;
 
+    commit_service->set_need_commit(this);
+
     sem_init(&commit_sem_lock, 0, 1);
 }
 
@@ -136,7 +138,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     }
 
 //    cout << "commit now" << endl;
-//    commit_now();
+    commit_now();
     commit_service->commit_all();
 
     u_int32_t cur_page_index = find_page_index(start_msg_index);
@@ -258,6 +260,11 @@ void MessageQueue::commit_later() {
     }
 
     sem_wait(&commit_sem_lock);
+
+    if (!is_need_commit) {
+        return;
+    }
+
     commit_buffer_queue[commit_q_tail++%max_commit_q_len] = put_buffer;
 //    commit_buffer_queue.push(put_buffer);
 //    cout << "commit later" << endl;
@@ -277,6 +284,11 @@ void MessageQueue::commit_now() {
     }
 
     sem_wait(&commit_sem_lock);
+
+    if (!is_need_commit) {
+        return;
+    }
+
     commit_buffer_queue[commit_q_tail++%max_commit_q_len] = put_buffer;
 //    commit_buffer_queue.push(put_buffer);
 //    cout << "commit now" << endl;

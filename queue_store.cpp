@@ -8,7 +8,7 @@ using namespace race2018;
 #define FILE_SIZE_2G (2 * FILE_SIZE_1G)
 #define FILE_SIZE_4G (4 * FILE_SIZE_1G)
 #define FILE_SIZE_200G (200 * FILE_SIZE_1G)
-#define REGION_SIZE (1024 * 1024 * 1024L)
+#define REGION_SIZE (2 * 1024 * 1024 * 1024L)
 #define FILE_SIZE FILE_SIZE_200G
 
 #include "commit_service.h"
@@ -19,10 +19,11 @@ using namespace race2018;
 #include "buffer_pool.h"
 
 queue_store::queue_store() {
-//    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE);
-    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
-    idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
-    buffer_pool = new BufferPool(16000000, 256);
+    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE);
+//    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
+    idle_page_manager = new IdlePageManager(FILE_SIZE, 2048);
+//    buffer_pool = new BufferPool(16000000, 256);
+    buffer_pool = new BufferPool(10000000, 256);
 //    buffer_pool = new BufferPool(8000000, 512);
     commit_service = new CommitService(store_io, 1);
     commit_service->start();

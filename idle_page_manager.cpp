@@ -10,9 +10,9 @@ using namespace std;
 
 IdlePageManager::IdlePageManager(u_int64_t total_size, u_int32_t page_size) {
 
-    if (page_size > total_size || page_size < PAGE_SIZE_4K) {
-        page_size = PAGE_SIZE_4K;
-    }
+//    if (page_size > total_size || page_size < PAGE_SIZE_4K) {
+//        page_size = PAGE_SIZE_4K;
+//    }
 
     page_bits_len = 0;
     page_size--;

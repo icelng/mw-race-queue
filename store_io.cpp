@@ -12,6 +12,16 @@
 
 using namespace std;
 
+void* flush_service(void *arg) {
+    StoreIO *store_io = (StoreIO *)arg;
+
+    while (true) {
+        store_io->flush();
+        sleep(10);
+    }
+
+}
+
 StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_size) {
 
     region_size--;
@@ -23,7 +33,6 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
     this->region_size = 1 << region_bits_len;
     this->region_mask = this->region_size - 1;
     this->regions_num = static_cast<u_int32_t>(file_size >> this->region_bits_len);
-    this->is_read_mode = false;
 
     if (access(file_path, F_OK) != -1) {
         /*文件存在则删除*/
@@ -35,19 +44,20 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
     file_fd = open(file_path, O_RDWR | O_CREAT);
     ftruncate(file_fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
-//    for (int i = 0;i < regions_num;i++) {
-//        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, (long) i * this->region_size);
-//        if (regions[i] == reinterpret_cast<void *>(-1)) {
-//            cout << "Failed to map file!!!" << strerror(errno) << endl;
-//        }
-//        printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
-//        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
-//    }
-    region_ptr_now = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, file_fd, (long) 0);
-    region_no_now = 0;
+    for (int i = 0;i < regions_num;i++) {
+        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, file_fd, (long) i * this->region_size);
+        if (regions[i] == reinterpret_cast<void *>(-1)) {
+            cout << "Failed to map file!!!" << strerror(errno) << endl;
+        }
+        printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
+        cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
+    }
     printf("Mapped region_mask:0x%x\n", region_mask);
 
     cout << "Mapped file successfully!" << endl;
+
+    pthread_t tid;
+    pthread_create(&tid, NULL, flush_service, this);
 
 }
 
@@ -58,34 +68,12 @@ void* StoreIO::get_region(u_int64_t addr) {
         cout << "Illegal address when get_region!" << endl;
     }
 
-    if (!is_read_mode) {
-        lock_guard<std::mutex> lock(mutex);
-        if (region_no != region_no_now) {
-            munmap(region_ptr_now, region_size);
-            region_ptr_now = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, file_fd, (long) region_no * region_size);
-            if (region_ptr_now == reinterpret_cast<void *>(-1)) {
-                cout << "Failed to map file!!!" << strerror(errno) << endl;
-            }
-            region_no_now = region_no;
-        }
-
-    } else {
-        region_ptr_now = regions[region_no];
-    }
-
-    return region_ptr_now;
+    return regions[region_no];
 }
 
-void StoreIO::set_read_mode() {
-    if (!is_read_mode) {
-        munmap(region_ptr_now, region_size);
-        for (int i = 0;i < regions_num;i++) {
-            regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, file_fd, (long) i * this->region_size);
-            if (regions[i] == reinterpret_cast<void *>(-1)) {
-                cout << "Failed to map file!!!" << strerror(errno) << endl;
-            }
-            printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
-        }
+void StoreIO::flush() {
+    for (int i = 0;i < regions_num;i++) {
+        msync(regions[i], region_size, MS_SYNC);
     }
-    is_read_mode = true;
 }
+

@@ -22,6 +22,7 @@ CommitService::CommitService(StoreIO *store_io, unsigned int thread_num) {
     head = 0;
     tail = 0;
     pthread_spin_init(&spinlock, 0);
+    is_need_commit_all = true;
 }
 
 void *service(void *arg) {
@@ -88,7 +89,6 @@ void CommitService::commit_all() {
             message_queue->commit_now();
         }
         is_need_commit_all = false;
-        store_io->set_read_mode();
     }
 }
 
