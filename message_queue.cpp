@@ -13,7 +13,7 @@ using namespace std;
 using namespace race2018;
 
 #define MSG_HEAD_SIZE 2
-#define INITIAL_PAGE_TABLE_LEN 64
+#define INITIAL_PAGE_TABLE_LEN 32
 #define EXPEND_PAGE_TABLE_LEN 8
 
 MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io, CommitService *commit_service, BufferPool *buffer_pool) {
