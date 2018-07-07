@@ -5,15 +5,23 @@
 
 #include "commit_service.h"
 #include "message_queue.h"
+#include "store_io.h"
 #include "pthread.h"
 #include <iostream>
 
+#define COMMIT_QUEUE_LEN 2000000
+
 using namespace std;
 
-CommitService::CommitService(unsigned int thread_num) {
+CommitService::CommitService(StoreIO *store_io, unsigned int thread_num) {
     this->thread_num = thread_num;
+    this->store_io = store_io;
     sem_init(&this->requesting_num, 0, 0);
     is_started = false;
+    commit_queue = (MessageQueue**) malloc(sizeof(void*) * COMMIT_QUEUE_LEN);
+    head = 0;
+    tail = 0;
+    pthread_spin_init(&spinlock, 0);
 }
 
 void *service(void *arg) {
@@ -41,7 +49,10 @@ void CommitService::start() {
 }
 
 void CommitService::request_commit(MessageQueue *messageQueue) {
-    commit_queue.push(messageQueue);
+//    commit_queue.push(messageQueue);
+    pthread_spin_lock(&spinlock);
+    commit_queue[tail++ % COMMIT_QUEUE_LEN] = messageQueue;
+    pthread_spin_unlock(&spinlock);
     sem_post(&requesting_num);
 }
 
@@ -52,17 +63,37 @@ void CommitService::do_commit() {
 
     sem_wait(&requesting_num);
     MessageQueue *message_queue;
-    if (!commit_queue.try_pop(message_queue)) {
-        cout << "Failed to pop message_queue when doing do_commit!" << endl;
-        return;
-    }
+//    if (!commit_queue.try_pop(message_queue)) {
+//        cout << "Failed to pop message_queue when doing do_commit!" << endl;
+//        return;
+//    }
+
+    pthread_spin_lock(&spinlock);
+    message_queue = commit_queue[head++ % COMMIT_QUEUE_LEN];
+    pthread_spin_unlock(&spinlock);
 
     if (message_queue == NULL) {
         cout << "The message_queue is NULL, please put a right point to the do_commit queue!" << endl;
+        return;
     }
 
     message_queue->do_commit();
 
+}
+
+void CommitService::commit_all() {
+    if (is_need_commit_all) {
+        MessageQueue *message_queue;
+        while (need_commit.try_pop(message_queue)) {
+            message_queue->commit_now();
+        }
+        is_need_commit_all = false;
+        store_io->set_read_mode();
+    }
+}
+
+void CommitService::set_need_commit(MessageQueue *message_queue) {
+    need_commit.push(message_queue);
 }
 
 

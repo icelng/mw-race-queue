@@ -136,7 +136,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     }
 
 //    cout << "commit now" << endl;
-    commit_now();
+//    commit_now();
+    commit_service->commit_all();
 
     u_int32_t cur_page_index = find_page_index(start_msg_index);
 
