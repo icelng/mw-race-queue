@@ -105,6 +105,20 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
     page_table[last_page_index * 2 + 1] = ++queue_len;
     need_commit_size += (MSG_HEAD_SIZE + mem_block.size);
 
+    if (need_commit_size > idle_page_manager->get_page_size() - 60) {
+        if (last_page_index + 1 >= page_table_len) {
+            expend_page_table();
+        }
+
+        commit_later();
+        put_buffer_offset = 0;
+        is_need_commit = false;
+
+        last_page_index++;
+        page_table[last_page_index * 2 + 1] = queue_len;
+
+    }
+
     free(mem_block.ptr);
 
 }

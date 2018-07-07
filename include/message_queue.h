@@ -27,11 +27,11 @@ public:
     void put(const race2018::MemBlock &mem_block);
     std::vector<race2018::MemBlock> get(long offset, long number);
     void do_commit();
+    void commit_now();
 
 
 private:
     void commit_later();
-    void commit_now();
     void shortToBytes(unsigned short v, unsigned char b[], int off);
     unsigned short bytesToShort(unsigned char b[], int off);
     void expend_page_table();
