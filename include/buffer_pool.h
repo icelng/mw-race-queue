@@ -10,7 +10,7 @@
 
 class BufferPool {
 public:
-    BufferPool(u_int32_t pool_size, u_int32_t buffer_size);
+    BufferPool(u_int64_t pool_size, u_int64_t buffer_size);
 
     void* borrow_buffer();
     void return_buffer(void*);
@@ -19,7 +19,7 @@ public:
 
 private:
     sem_t remain_buffer_num;
-    u_int32_t buffer_size;
+    u_int64_t buffer_size;
     void **buffers;
     size_t max_queue_length;
     std::atomic<long> head;

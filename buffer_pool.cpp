@@ -10,6 +10,8 @@
 
 using namespace std;
 
+//#define REGION_SIZE 1024 * 1024 * 1024L
+
 void *buffer_monitor(void* arg) {
     BufferPool *buffer_pool = static_cast<BufferPool *>(arg);
     while (true) {
@@ -19,7 +21,7 @@ void *buffer_monitor(void* arg) {
 
 }
 
-BufferPool::BufferPool(u_int32_t pool_size, u_int32_t buffer_size) {
+BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
     this->buffer_size = buffer_size;
     this->max_queue_length = pool_size + 1;
     this->head = 0;
