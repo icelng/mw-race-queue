@@ -13,6 +13,7 @@
 #include "tbb/concurrent_queue.h"
 #include "semaphore.h"
 #include "queue_store.h"
+#include "pthread.h"
 
 class StoreIO;
 class IdlePageManager;

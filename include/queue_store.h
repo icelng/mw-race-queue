@@ -17,6 +17,9 @@ class BufferPool;
 // Please keep this namespace intact.
 namespace race2018 {
 
+
+    typedef tbb::concurrent_hash_map<long, MessageQueue*> QueueTable;
+
     struct MemBlock {
         /**
          * Pointer to the data. ptr is allocated by new char[LENGTH]
@@ -69,11 +72,13 @@ namespace race2018 {
         /**
          * This field is used for demonstration purpose only. You may remove it.
          */
-        tbb::concurrent_hash_map<std::string, MessageQueue*> queue_map;
+        QueueTable queue_map;
+        MessageQueue** queue_table;
         StoreIO *store_io;
         IdlePageManager *idle_page_manager;
         CommitService *commit_service;
         BufferPool *buffer_pool;
+        std::mutex queue_table_mutex;
 
     };
 }

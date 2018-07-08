@@ -12,6 +12,7 @@ using namespace race2018;
 #define FILE_SIZE FILE_SIZE_200G
 #define WRITE_BUFFERS_NUM 4
 #define WRITE_BUFFERS_SIZE (128 * 1024 * 1024L)
+#define QUEUE_TABLE_LEN 1000000
 
 #include "commit_service.h"
 #include "idle_page_manager.h"
@@ -19,6 +20,7 @@ using namespace race2018;
 #include "store_io.h"
 #include "message_queue.h"
 #include "buffer_pool.h"
+
 
 queue_store::queue_store() {
     store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
@@ -30,6 +32,10 @@ queue_store::queue_store() {
 //    buffer_pool = new BufferPool(8000000, 512);
     commit_service = new CommitService(store_io, 1);
     commit_service->start();
+    queue_table = (MessageQueue**) malloc(QUEUE_TABLE_LEN * sizeof(MessageQueue*));
+    for (int i = 0;i < QUEUE_TABLE_LEN;i++) {
+        queue_table[i] = nullptr;
+    }
 }
 
 /**
@@ -37,15 +43,25 @@ queue_store::queue_store() {
  */
 void queue_store::put(const string& queue_name, const MemBlock& message) {
     MessageQueue *message_queue;
+    long queue_id = strtol(queue_name.substr(6, queue_name.size() - 5).c_str(), NULL, 10);
 
-    {
-        tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
-        if (queue_map.insert(a, queue_name)) {
-            message_queue = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
-            a->second = message_queue;
+    if (queue_table[queue_id] == nullptr) {
+        std::lock_guard<mutex> lock(queue_table_mutex);
+        if (queue_table[queue_id] == nullptr) {
+            queue_table[queue_id] = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
         }
-        message_queue = a->second;
     }
+
+    message_queue = queue_table[queue_id];
+
+//    {
+//        QueueTable::accessor a;
+//        if (queue_map.insert(a, queue_id)) {
+//            message_queue = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
+//            a->second = message_queue;
+//        }
+//        message_queue = a->second;
+//    }
 
     message_queue->put(message);
 }
@@ -55,15 +71,18 @@ void queue_store::put(const string& queue_name, const MemBlock& message) {
  */
 vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, long number) {
     MessageQueue *message_queue;
+    long queue_id = strtol(queue_name.substr(6, queue_name.size() - 5).c_str(), NULL, 10);
 
 //    cout << "Find queue" << endl;
-    {
-        tbb::concurrent_hash_map<std::string, MessageQueue*>::accessor a;
-        if (!queue_map.find(a, queue_name)) {
-            return vector<MemBlock>();
-        }
-        message_queue = a->second;
-    }
+//    {
+//        QueueTable::accessor a;
+//        if (!queue_map.find(a, queue_id)) {
+//            return vector<MemBlock>();
+//        }
+//        message_queue = a->second;
+//    }
+
+    message_queue = queue_table[queue_id];
 
     return message_queue->get(offset, number);
 }

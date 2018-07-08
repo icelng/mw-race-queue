@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(queue_race)
 
 set(CMAKE_CXX_STANDARD 11)
-SET(CMAKE_CXX_FLAGS "-pg")
+#SET(CMAKE_CXX_FLAGS "-pg")
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
@@ -28,6 +28,8 @@ add_library(queue_race SHARED ${SOURCE_FILES})
 target_link_libraries(queue_race pthread)
 
 target_link_libraries(queue_race tbb)
+
+#target_link_libraries(queue_race profiler)
 
 add_subdirectory(example)
 
