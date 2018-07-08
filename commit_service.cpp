@@ -93,7 +93,7 @@ void CommitService::commit_all() {
             }
             store_io->flush();
             store_io->wait_flush_done();
-//            buffer_pool->release_all();
+            buffer_pool->release_all();
             is_need_commit_all = false;
         }
     }

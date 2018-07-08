@@ -38,6 +38,8 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
 
     /**read cache**/
     is_have_read_cache = false;
+    is_read_cache_actived = false;
+    read_cache_trigger = 0;
     read_cache_buffer = NULL;
     cur_read_cache_page_addr = 0;
     last_read_index = -1;
@@ -148,6 +150,10 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 //    commit_now();
     commit_service->commit_all();
 
+    if (read_cache_trigger++ > 3) {
+        is_read_cache_actived = true;
+    }
+
     u_int32_t cur_page_index = find_page_index(start_msg_index);
     u_int64_t msg_page_phy_address = 0;
 
@@ -229,11 +235,11 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     }
 
     /**把最后一页数据保存到常驻缓存中**/
-    if (cur_read_cache_page_addr != msg_page_phy_address) {
+    if (cur_read_cache_page_addr != msg_page_phy_address & is_read_cache_actived) {
         if (!is_have_read_cache) {
             /**第一次申请cache**/
-//            read_cache_buffer = malloc(idle_page_manager->get_page_size());
-            read_cache_buffer = buffer_pool->borrow_page();
+            read_cache_buffer = malloc(idle_page_manager->get_page_size());
+//            read_cache_buffer = buffer_pool->borrow_page();
             is_have_read_cache = true;
         }
         cur_read_cache_page_addr = msg_page_phy_address;

@@ -64,8 +64,10 @@ private:
     std::atomic<int> hold_buffers_num;
 
     bool is_have_read_cache;
+    bool is_read_cache_actived;
     void* read_cache_buffer;
     u_int64_t cur_read_cache_page_addr;
+    u_int64_t read_cache_trigger;
     long last_read_index;
     u_int64_t last_read_offset_in_page;
 };
