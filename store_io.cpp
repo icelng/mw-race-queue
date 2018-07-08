@@ -62,6 +62,8 @@ StoreIO::StoreIO(const char* file_path,
     this->buffer_size = buffer_size;
     sem_init(&this->buffers_num, 0, buffers_num);
     sem_init(&this->flush_req_num, 0, 0);
+    sem_init(&this->is_flushing, 0, 1);
+    flush_req_num_atomic = 0;
     buffer_now = NULL;
 
     for (int i = 0;i < buffers_num;i++) {
@@ -93,6 +95,9 @@ void StoreIO::flush() {
         flush_req_node.buffer = buffer_now;
         flush_req_node.flush_size = buffer_offset;
         flush_queue.push(flush_req_node);
+        if (flush_req_num_atomic.fetch_add(1) == 0) {
+            sem_wait(&is_flushing);
+        }
         sem_post(&flush_req_num);
         buffer_now = NULL;
     }
@@ -125,6 +130,9 @@ void StoreIO::write_data(void *data, size_t data_size) {
             flush_req_node.buffer = buffer_now;
             flush_req_node.flush_size = buffer_offset;
             flush_queue.push(flush_req_node);
+            if (flush_req_num_atomic.fetch_add(1) == 0) {
+                sem_wait(&is_flushing);
+            }
             sem_post(&flush_req_num);
 
             if (data_offset < data_size) {
@@ -161,9 +169,16 @@ void StoreIO::do_flush() {
 
         buffers.push(req_node.buffer);
         sem_post(&buffers_num);
-
+        if (flush_req_num_atomic.fetch_sub(1) == 1) {
+            sem_post(&is_flushing);
+        }
     }
 
+}
+
+void StoreIO::wait_flush_done() {
+    sem_wait(&is_flushing);
+    sem_post(&is_flushing);
 }
 
 

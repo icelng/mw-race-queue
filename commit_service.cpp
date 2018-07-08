@@ -91,9 +91,10 @@ void CommitService::commit_all() {
             while (need_commit.try_pop(message_queue)) {
                 message_queue->commit_now();
             }
-            is_need_commit_all = false;
             store_io->flush();
+            store_io->wait_flush_done();
             buffer_pool->release_all();
+            is_need_commit_all = false;
         }
     }
 }
