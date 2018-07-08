@@ -23,12 +23,12 @@ using namespace race2018;
 
 
 queue_store::queue_store() {
-    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
-//    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
+//    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
+    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
 //    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
     idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
 //    buffer_pool = new BufferPool(16000000, 256);
-    buffer_pool = new BufferPool(2200000, 2048);
+    buffer_pool = new BufferPool(8800000, 512);
 //    buffer_pool = new BufferPool(8000000, 512);
     commit_service = new CommitService(store_io, 1);
     commit_service->start();
@@ -43,7 +43,7 @@ queue_store::queue_store() {
  */
 void queue_store::put(const string& queue_name, const MemBlock& message) {
     MessageQueue *message_queue;
-    long queue_id = strtol(queue_name.substr(6, queue_name.size() - 5).c_str(), NULL, 10);
+    long queue_id = strtol(&queue_name.c_str()[6], NULL, 10);
 
     if (queue_table[queue_id] == nullptr) {
         std::lock_guard<mutex> lock(queue_table_mutex);
@@ -71,7 +71,8 @@ void queue_store::put(const string& queue_name, const MemBlock& message) {
  */
 vector<MemBlock> queue_store::get(const std::string& queue_name, long offset, long number) {
     MessageQueue *message_queue;
-    long queue_id = strtol(queue_name.substr(6, queue_name.size() - 5).c_str(), NULL, 10);
+
+    long queue_id = strtol(&queue_name.c_str()[6], NULL, 10);
 
 //    cout << "Find queue" << endl;
 //    {

@@ -7,6 +7,7 @@
 
 #include "tbb/concurrent_queue.h"
 #include "semaphore.h"
+#include <mutex>
 
 struct FlushRequestNode {
     void* buffer;
@@ -41,6 +42,7 @@ private:
     tbb::concurrent_queue<void*> buffers;
     sem_t flush_req_num;
     int file_fd;
+    std::mutex flush_mutex;
 };
 
 #endif //QUEUE_RACE_STORE_IO_H

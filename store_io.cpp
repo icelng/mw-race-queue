@@ -87,6 +87,7 @@ void* StoreIO::get_region(u_int64_t addr) {
 }
 
 void StoreIO::flush() {
+    std::lock_guard<std::mutex> lock(flush_mutex);
     if (buffer_now != NULL) {
         FlushRequestNode flush_req_node;
         flush_req_node.buffer = buffer_now;
@@ -102,6 +103,7 @@ void StoreIO::flush() {
  * 最好是对齐页的
  * */
 void StoreIO::write_data(void *data, size_t data_size) {
+    std::lock_guard<std::mutex> lock(flush_mutex);
     u_int64_t data_offset = 0;
 
     if (buffer_now == NULL) {

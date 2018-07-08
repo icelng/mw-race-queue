@@ -246,6 +246,13 @@ void MessageQueue::do_commit() {
             cout << "commit buffers error!!!num:" << i << endl;
         }
     }
+    while (i++ < idle_page_manager->get_page_size()/buffer_size) {
+        /*补充一页*/
+        void* buffer_temp = buffer_pool->borrow_buffer();
+        store_io->write_data(buffer_temp, buffer_size);
+        buffer_pool->return_buffer(buffer_temp);
+    }
+
     hold_buffers_num--;
 
     page_table[committing_page_index * 2] = idle_page_phy_address;
