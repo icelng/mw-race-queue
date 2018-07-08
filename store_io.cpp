@@ -12,17 +12,18 @@
 
 using namespace std;
 
-void* flush_service(void *arg) {
-    StoreIO *store_io = (StoreIO *)arg;
+void* flush_service(void* arg) {
+    StoreIO *store_io = (StoreIO*) arg;
 
-    while (true) {
-        store_io->flush();
-        sleep(10);
-    }
+    store_io->do_flush();
 
 }
 
-StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_size) {
+StoreIO::StoreIO(const char* file_path,
+                 u_int64_t file_size,
+                 u_int64_t region_size,
+                 size_t buffers_num,
+                 size_t buffer_size) {
 
     region_size--;
     region_bits_len = 0;
@@ -41,7 +42,7 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
     }
 
     cout << "Open log-file" << endl;
-    file_fd = open(file_path, O_RDWR | O_CREAT);
+    file_fd = open(file_path, O_RDWR | O_CREAT | O_DIRECT);
     ftruncate(file_fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
     for (int i = 0;i < regions_num;i++) {
@@ -56,8 +57,22 @@ StoreIO::StoreIO(const char* file_path, u_int64_t file_size, u_int64_t region_si
 
     cout << "Mapped file successfully!" << endl;
 
+
+    /*关于写缓存配置*/
+    this->buffer_size = buffer_size;
+    sem_init(&this->buffers_num, 0, buffers_num);
+    sem_init(&this->flush_req_num, 0, 0);
+    buffer_now = NULL;
+
+    for (int i = 0;i < buffers_num;i++) {
+        void* buffer;
+        posix_memalign(&buffer, getpagesize(), buffer_size);
+        buffers.push(buffer);
+    }
+
     pthread_t tid;
     pthread_create(&tid, NULL, flush_service, this);
+
 
 }
 
@@ -72,8 +87,81 @@ void* StoreIO::get_region(u_int64_t addr) {
 }
 
 void StoreIO::flush() {
-    for (int i = 0;i < regions_num;i++) {
-        msync(regions[i], region_size, MS_SYNC);
+    if (buffer_now != NULL) {
+        FlushRequestNode flush_req_node;
+        flush_req_node.buffer = buffer_now;
+        flush_req_node.flush_size = buffer_offset;
+        flush_queue.push(flush_req_node);
+        sem_post(&flush_req_num);
+        buffer_now = NULL;
     }
+
 }
+
+/**
+ * 最好是对齐页的
+ * */
+void StoreIO::write_data(void *data, size_t data_size) {
+    u_int64_t data_offset = 0;
+
+    if (buffer_now == NULL) {
+        sem_wait(&buffers_num);
+        buffers.try_pop(buffer_now);
+        buffer_offset = 0;
+    }
+
+    while (data_offset < data_size) {
+        size_t this_write_size = std::min(buffer_size - buffer_offset, data_size - data_offset);
+
+        memcpy(buffer_now + buffer_offset, data + data_offset, this_write_size);
+        buffer_offset += this_write_size;
+        data_offset += this_write_size;
+
+        if (buffer_offset == buffer_size) {
+            /*提交flush*/
+            FlushRequestNode flush_req_node;
+            flush_req_node.buffer = buffer_now;
+            flush_req_node.flush_size = buffer_offset;
+            flush_queue.push(flush_req_node);
+            sem_post(&flush_req_num);
+
+            if (data_offset < data_size) {
+                /*还需要申请buffer来写*/
+                sem_wait(&buffers_num);
+                buffers.try_pop(buffer_now);
+                buffer_offset = 0;
+            } else {
+                /*否则, 退出*/
+                buffer_now = NULL;
+                buffer_offset = 0;
+                break;
+            }
+        }
+
+    }
+
+}
+
+void StoreIO::do_flush() {
+    FlushRequestNode req_node;
+
+    while (true) {
+        sem_wait(&flush_req_num);
+        if (!flush_queue.try_pop(req_node)) {
+            cout << "Failed to pop FlushRequestNode!!" << endl;
+            continue;
+        }
+
+        /*写*/
+        if (write(file_fd, req_node.buffer, req_node.flush_size) != req_node.flush_size) {
+            cout << "Failed to write data to file!!!" << strerror(errno) << endl;
+        }
+
+        buffers.push(req_node.buffer);
+        sem_post(&buffers_num);
+
+    }
+
+}
+
 

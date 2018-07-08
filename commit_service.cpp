@@ -89,6 +89,7 @@ void CommitService::commit_all() {
             message_queue->commit_now();
         }
         is_need_commit_all = false;
+        store_io->flush();
     }
 }
 

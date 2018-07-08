@@ -219,8 +219,8 @@ void MessageQueue::do_commit() {
 
 
     idle_page_phy_address = idle_page_manager->get_one_page();
-    mapped_region_ptr = store_io->get_region(idle_page_phy_address);
-    idle_page_mem_ptr = mapped_region_ptr + (idle_page_phy_address & store_io->region_mask);
+//    mapped_region_ptr = store_io->get_region(idle_page_phy_address);
+//    idle_page_mem_ptr = mapped_region_ptr + (idle_page_phy_address & store_io->region_mask);
 
     //cout << "idle_page_phy_address:" << idle_page_phy_address << ", mapped_region_ptr:" << mapped_region_ptr << ", idle_page_mem_ptr:" << idle_page_mem_ptr << endl;
 
@@ -235,7 +235,8 @@ void MessageQueue::do_commit() {
         commit_buffer = commit_buffer_queue[commit_q_head++%max_commit_q_len];
         size_t commit_size = std::min(committing_size - commit_offset, buffer_size);
 //        cout << "commit size:" << commit_size << "committing size:" << committing_size << endl;
-        memcpy(idle_page_mem_ptr + commit_offset, commit_buffer, commit_size);
+//        memcpy(idle_page_mem_ptr + commit_offset, commit_buffer, commit_size);
+        store_io->write_data(commit_buffer, buffer_size);
         buffer_pool->return_buffer(commit_buffer);
         commit_offset += commit_size;
         if (commit_offset > idle_page_manager->get_page_size()) {
