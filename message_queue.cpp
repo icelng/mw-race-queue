@@ -145,7 +145,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     }
 
 //    cout << "commit now" << endl;
-    commit_now();
+//    commit_now();
     commit_service->commit_all();
 
     u_int32_t cur_page_index = find_page_index(start_msg_index);
@@ -163,7 +163,9 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         void* read_start_ptr = 0;
         u_int64_t offset_in_page;
         u_int64_t start_index_in_page;
+        void* page_start_ptr;
         if (cur_read_cache_page_addr == msg_page_phy_address && is_have_read_cache) {
+            page_start_ptr = read_cache_buffer;
             if (last_read_index == start_msg_index) {
                 offset_in_page = last_read_offset_in_page;
             } else {
@@ -174,7 +176,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             read_start_ptr = read_cache_buffer + offset_in_page;
         } else {
             void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
-            void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
+            page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
             start_index_in_page = cur_page_index == 0 ?
                                             start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
             offset_in_page = locate_msg_offset_in_page(page_start_ptr, start_index_in_page);
@@ -186,8 +188,9 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             auto msg_size = bytesToShort(static_cast<unsigned char *>(read_start_ptr + read_offset), 0);
             read_offset += MSG_HEAD_SIZE;
             void* msg_buf = malloc(msg_size);
-//            memset(msg_buf, 0, msg_size);
             memcpy(msg_buf, read_start_ptr + read_offset, msg_size);
+
+            /**调试代码**/
 //            int index = start_msg_index + i + j;
 //            int msg_len = 1;
 //            index = index / 10;
@@ -211,15 +214,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 //                std::cout << "Check error:" << (char *)msg_buf << ", need:"<< index <<  std::endl;
 //            }
 //            ((char *)msg_buf)[msg_len] = save;
-//            cout << "Get msg:" << (char *)msg_buf << endl;
-//            if (strcmp(std::to_string(start_msg_index + i + j).c_str(), static_cast<const char *>(block.ptr)) != 0) {
-//                cout << "error msg size:" << msg_size << ", msg:" << (char *) msg_buf;
-//                cout << "phy address:" << msg_page_phy_address << endl;
-//            }
-//            if (msg_size != 51) {
-//                cout << "error msg size:" << msg_size << ", msg:" << (char *) msg_buf;
-//                cout << "phy address:" << msg_page_phy_address << endl;
-//            }
+
+
             read_offset += msg_size;
             block.size = msg_size;
             block.ptr = msg_buf;
@@ -234,7 +230,6 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
     /**把最后一页数据保存到常驻缓存中**/
     if (cur_read_cache_page_addr != msg_page_phy_address) {
-        size_t buffers_num = idle_page_manager->get_page_size() / buffer_size;
         if (!is_have_read_cache) {
             /**第一次申请cache**/
             read_cache_buffer = malloc(idle_page_manager->get_page_size());
@@ -255,6 +250,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
  * 不能被直接调用
  * */
 void MessageQueue::do_commit() {
+    lock_guard<mutex> lock(commit_service->commit_mutex);  // 并发commit page会乱
+
     u_int64_t idle_page_phy_address;
     void* idle_page_mem_ptr;
     void* mapped_region_ptr;

@@ -53,7 +53,7 @@ void *BufferPool::borrow_buffer() {
     pthread_spin_lock(&spinlock);
     void* buffer = buffers[head++%max_queue_length];
     pthread_spin_unlock(&spinlock);
-    memset(buffer, 0, buffer_size);
+//    memset(buffer, 0, buffer_size);
     return buffer;
 }
 
