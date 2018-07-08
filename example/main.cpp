@@ -206,7 +206,7 @@ int main(int argc, char* argv[])
     //正确性检测的次数
     int checkNum = static_cast<int>(queueNum * 1.5);
     //消费阶段的总队列数量
-    int checkQueueNum = static_cast<int>(queueNum * 0.2);
+    int checkQueueNum = 100000;
     //发送的线程数量
     int sendTsNum = 10;
     //消费的线程数量

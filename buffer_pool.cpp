@@ -26,13 +26,13 @@ BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
     this->max_queue_length = pool_size + 1;
     this->head = 0;
     this->tail = pool_size;
-    void* start = malloc(pool_size * buffer_size);
+    void* memory = malloc(pool_size * buffer_size);
     this->buffers = (void **) malloc(max_queue_length * sizeof(void *));
     pthread_spin_init(&spinlock, 0);
 
 
     for (int i = 0;i < pool_size;i++) {
-        buffers[i] = start + buffer_size * i;
+        buffers[i] = memory + buffer_size * i;
         memset(buffers[i], 0, buffer_size);
     }
 
@@ -72,4 +72,8 @@ int BufferPool::get_remain_buffers_num() {
     int num;
     sem_getvalue(&remain_buffer_num, &num);
     return num;
+}
+
+void BufferPool::release_all() {
+    free(memory);
 }

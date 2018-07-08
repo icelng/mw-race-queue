@@ -16,8 +16,11 @@ public:
     void return_buffer(void*);
     u_int32_t get_buffer_size();
     int get_remain_buffers_num();
+    void release_all();
 
 private:
+    void* memory;
+
     sem_t remain_buffer_num;
     u_int64_t buffer_size;
     void **buffers;

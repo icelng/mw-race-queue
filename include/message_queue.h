@@ -62,6 +62,12 @@ private:
     size_t buffer_size;
     std::mutex mtx;
     std::atomic<int> hold_buffers_num;
+
+    bool is_have_read_cache;
+    void* read_cache_buffer;
+    u_int64_t cur_read_cache_page_addr;
+    long last_read_index;
+    u_int64_t last_read_offset_in_page;
 };
 
 #endif //QUEUE_RACE_MESSAGE_QUEUE_H

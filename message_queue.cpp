@@ -36,6 +36,13 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
     commit_q_head = 0;
     commit_q_tail = 0;
 
+    /**read cache**/
+    is_have_read_cache = false;
+    read_cache_buffer = NULL;
+    cur_read_cache_page_addr = 0;
+    last_read_index = -1;
+    last_read_offset_in_page = 0;
+
     commit_service->set_need_commit(this);
 
     sem_init(&commit_sem_lock, 0, 1);
@@ -142,22 +149,38 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     commit_service->commit_all();
 
     u_int32_t cur_page_index = find_page_index(start_msg_index);
+    u_int64_t msg_page_phy_address = 0;
 
     for (int i = 0; i < adjust_num;i += read_num) {
 
-        u_int64_t msg_page_phy_address = page_table[cur_page_index * 2];
+        msg_page_phy_address = page_table[cur_page_index * 2];
         read_num = std::min(page_table[cur_page_index * 2 + 1] - (start_msg_index + i), adjust_num - i);
 //        if (read_num <= 0) {
 //            cout << "Read num = 0?ha? adjust_num:" << adjust_num << ", i:" << i << endl;
 //        }
-        void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
-        void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
-        u_int64_t start_index_in_page = cur_page_index == 0 ?
-                start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
-        u_int64_t offset_in_page = locate_msg_offset_in_page(page_start_ptr, start_index_in_page);
-        void* read_start_ptr = page_start_ptr + offset_in_page;
 
         u_int64_t read_offset = 0;
+        void* read_start_ptr = 0;
+        u_int64_t offset_in_page;
+        u_int64_t start_index_in_page;
+        if (cur_read_cache_page_addr == msg_page_phy_address && is_have_read_cache) {
+            if (last_read_index == start_msg_index) {
+                offset_in_page = last_read_offset_in_page;
+            } else {
+                start_index_in_page = cur_page_index == 0 ?
+                                                start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
+                offset_in_page = locate_msg_offset_in_page(read_cache_buffer, start_index_in_page);
+            }
+            read_start_ptr = read_cache_buffer + offset_in_page;
+        } else {
+            void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
+            void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
+            start_index_in_page = cur_page_index == 0 ?
+                                            start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
+            offset_in_page = locate_msg_offset_in_page(page_start_ptr, start_index_in_page);
+            read_start_ptr = page_start_ptr + offset_in_page;
+        }
+
         for (int j = 0;j < read_num;j++) {
             race2018::MemBlock block;
             auto msg_size = bytesToShort(static_cast<unsigned char *>(read_start_ptr + read_offset), 0);
@@ -201,10 +224,29 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             block.size = msg_size;
             block.ptr = msg_buf;
             ret.push_back(block);
+            last_read_offset_in_page = offset_in_page + read_offset;
+            last_read_index = start_msg_index + i + j + 1;
         }
+
 
         cur_page_index ++;
     }
+
+    /**把最后一页数据保存到常驻缓存中**/
+    if (cur_read_cache_page_addr != msg_page_phy_address) {
+        size_t buffers_num = idle_page_manager->get_page_size() / buffer_size;
+        if (!is_have_read_cache) {
+            /**第一次申请cache**/
+            read_cache_buffer = malloc(idle_page_manager->get_page_size());
+            is_have_read_cache = true;
+        }
+        cur_read_cache_page_addr = msg_page_phy_address;
+        void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
+        void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
+
+        memcpy(read_cache_buffer, page_start_ptr, idle_page_manager->get_page_size());
+    }
+
 
     return ret;
 }
@@ -371,5 +413,6 @@ u_int32_t MessageQueue::find_page_index(u_int64_t msg_index) {
 
     return mid;
 }
+
 
 

@@ -7,13 +7,16 @@
 
 #include "tbb/concurrent_queue.h"
 #include "semaphore.h"
+#include "buffer_pool.h"
+#include <mutex>
 
 class StoreIO;
 class MessageQueue;
+class BufferPool;
 
 class CommitService{
 public:
-    CommitService(StoreIO *store_io, unsigned int thread_num);
+    CommitService(StoreIO *store_io, BufferPool *buffer_pool, unsigned int thread_num);
     void start();
     void request_commit(MessageQueue *messageQueue);
     void do_commit();
@@ -23,6 +26,7 @@ private:
     unsigned int thread_num;
     StoreIO *store_io;
     MessageQueue** commit_queue;
+    BufferPool *buffer_pool;
 //    tbb::concurrent_queue<MessageQueue*> commit_queue;
     tbb::concurrent_queue<MessageQueue*> need_commit;
     bool is_started;
@@ -31,6 +35,7 @@ private:
     u_int64_t tail;
     pthread_spinlock_t spinlock;
     bool is_need_commit_all;
+    std::mutex mtx;
 
 };
 

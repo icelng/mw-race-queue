@@ -13,9 +13,10 @@
 
 using namespace std;
 
-CommitService::CommitService(StoreIO *store_io, unsigned int thread_num) {
+CommitService::CommitService(StoreIO *store_io, BufferPool *buffer_pool, unsigned int thread_num) {
     this->thread_num = thread_num;
     this->store_io = store_io;
+    this->buffer_pool = buffer_pool;
     sem_init(&this->requesting_num, 0, 0);
     is_started = false;
     commit_queue = (MessageQueue**) malloc(sizeof(void*) * COMMIT_QUEUE_LEN);
@@ -84,12 +85,16 @@ void CommitService::do_commit() {
 
 void CommitService::commit_all() {
     if (is_need_commit_all) {
-        MessageQueue *message_queue;
-        while (need_commit.try_pop(message_queue)) {
-            message_queue->commit_now();
+        lock_guard<mutex> lock(mtx);
+        if (is_need_commit_all) {
+            MessageQueue *message_queue;
+            while (need_commit.try_pop(message_queue)) {
+                message_queue->commit_now();
+            }
+            is_need_commit_all = false;
+            store_io->flush();
+            buffer_pool->release_all();
         }
-        is_need_commit_all = false;
-        store_io->flush();
     }
 }
 
