@@ -232,7 +232,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     if (cur_read_cache_page_addr != msg_page_phy_address) {
         if (!is_have_read_cache) {
             /**第一次申请cache**/
-            read_cache_buffer = malloc(idle_page_manager->get_page_size());
+//            read_cache_buffer = malloc(idle_page_manager->get_page_size());
+            read_cache_buffer = buffer_pool->borrow_page();
             is_have_read_cache = true;
         }
         cur_read_cache_page_addr = msg_page_phy_address;

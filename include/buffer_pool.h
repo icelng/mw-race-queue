@@ -17,6 +17,7 @@ public:
     u_int32_t get_buffer_size();
     int get_remain_buffers_num();
     void release_all();
+    void* borrow_page();  // 有借无还的
 
 private:
     void* memory;
@@ -27,6 +28,7 @@ private:
     size_t max_queue_length;
     std::atomic<long> head;
     std::atomic<long> tail;
+    std::atomic<unsigned long> page_get_index;
     pthread_spinlock_t spinlock;
 //    tbb::concurrent_queue<void*> buffers;
 };
