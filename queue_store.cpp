@@ -21,8 +21,8 @@ using namespace race2018;
 #include "buffer_pool.h"
 
 queue_store::queue_store() {
-//    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
-    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
+    store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
+//    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
 //    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
     idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
 //    buffer_pool = new BufferPool(16000000, 256);
