@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <random>
 #include <ctime>
+#include "gperftools/profiler.h"
 
 #include "queue_store.h"
 
@@ -202,7 +203,7 @@ int main(int argc, char* argv[])
     //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测
     int checkTime = 30 * 60 * 1000;
     //队列的数量
-    int queueNum = 100000;
+    int queueNum = 1000000;
     //正确性检测的次数
     int checkNum = static_cast<int>(queueNum * 1.5);
     //消费阶段的总队列数量
@@ -221,6 +222,8 @@ int main(int argc, char* argv[])
         queueNumMap[queueName];
         queueLockMap[queueName];
     }
+
+    ProfilerStart("profile");
 
     queue_store queueStore;
 
@@ -300,6 +303,7 @@ int main(int argc, char* argv[])
     std::cout << "Tps: "
               << (sendCounter + checkCounter + indexCheckCounter + 0.1) * 1000 / denom
               << std::endl;
+    ProfilerStop();
 
     return 0;
 }

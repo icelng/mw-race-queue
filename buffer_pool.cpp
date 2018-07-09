@@ -37,9 +37,8 @@ BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
         memset(buffers[i], 0, buffer_size);
     }
 
-//    sleep(100);
-
-    sem_init(&remain_buffer_num, 0, pool_size);
+    /**因为去掉了自旋锁,为了保证插入和取出时数据不冲突,留出部分buffer**/
+    sem_init(&remain_buffer_num, 0, pool_size - 30);
 
     cout << ((pool_size * (u_int64_t) buffer_size) >> 20) << "M buffer have been allocated!" << endl;
 
@@ -51,17 +50,17 @@ BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
 
 void *BufferPool::borrow_buffer() {
     sem_wait(&this->remain_buffer_num);
-    pthread_spin_lock(&spinlock);
+//    pthread_spin_lock(&spinlock);
     void* buffer = buffers[head++%max_queue_length];
-    pthread_spin_unlock(&spinlock);
+//    pthread_spin_unlock(&spinlock);
 //    memset(buffer, 0, buffer_size);
     return buffer;
 }
 
 void BufferPool::return_buffer(void *buffer) {
-    pthread_spin_lock(&spinlock);
+//    pthread_spin_lock(&spinlock);
     buffers[tail++%max_queue_length] = buffer;
-    pthread_spin_unlock(&spinlock);
+//    pthread_spin_unlock(&spinlock);
     sem_post(&this->remain_buffer_num);
 }
 
