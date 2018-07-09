@@ -11,7 +11,7 @@ using namespace race2018;
 #define REGION_SIZE (2 * 1024 * 1024 * 1024L)
 #define FILE_SIZE FILE_SIZE_200G
 #define WRITE_BUFFERS_NUM 4
-#define WRITE_BUFFERS_SIZE (64 * 1024 * 1024L)
+#define WRITE_BUFFERS_SIZE (128 * 1024 * 1024L)
 #define QUEUE_TABLE_LEN 1000000
 
 #include "commit_service.h"
