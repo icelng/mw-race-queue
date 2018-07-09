@@ -68,12 +68,9 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
 
         commit_later();
 //        commit_now();
-//        cout << "commit buffer queue size:" << commit_buffer_queue.unsafe_size() << endl;
-//        cout << "hold buffers num:" << hold_buffers_num << endl;
         put_buffer = buffer_pool->borrow_buffer();
         put_buffer_offset = 0;
         is_need_commit = true;
-        hold_buffers_num++;
 
         last_page_index++;
         page_table[last_page_index * 2 + 1] = queue_len;
@@ -130,7 +127,6 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
 
     }
 
-    free(mem_block.ptr);
 
 }
 
@@ -260,8 +256,6 @@ void MessageQueue::do_commit() {
     lock_guard<mutex> lock(commit_service->commit_mutex);  // 并发commit page会乱
 
     u_int64_t idle_page_phy_address;
-    void* idle_page_mem_ptr;
-    void* mapped_region_ptr;
 
 
     idle_page_phy_address = idle_page_manager->get_one_page();
@@ -299,7 +293,6 @@ void MessageQueue::do_commit() {
         buffer_pool->return_buffer(buffer_temp);
     }
 
-    hold_buffers_num--;
 
     page_table[committing_page_index * 2] = idle_page_phy_address;
 

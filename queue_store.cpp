@@ -65,6 +65,7 @@ void queue_store::put(const string& queue_name, const MemBlock& message) {
 //    }
 
     message_queue->put(message);
+    free(message.ptr);
 }
 
 /**

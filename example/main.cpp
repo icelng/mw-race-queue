@@ -245,6 +245,8 @@ int main(int argc, char* argv[])
     std::cout << "Send: " << std::chrono::duration<double, std::milli>(sendSend - sendStart).count()
               << " ms Num: " << sendCounter << std::endl;
 
+    ProfilerStop();
+
     //Step2: 索引的正确性校验
     auto indexCheckStart = std::chrono::high_resolution_clock::now();
     auto maxCheckTime = indexCheckStart + std::chrono::duration<long, std::milli>(checkTime);
@@ -303,7 +305,6 @@ int main(int argc, char* argv[])
     std::cout << "Tps: "
               << (sendCounter + checkCounter + indexCheckCounter + 0.1) * 1000 / denom
               << std::endl;
-    ProfilerStop();
 
     return 0;
 }
