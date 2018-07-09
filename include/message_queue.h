@@ -53,8 +53,8 @@ private:
     u_int64_t *page_table;
     size_t page_table_len;
     void** commit_buffer_queue;
-    std::atomic<long> commit_q_head;
-    std::atomic<long> commit_q_tail;
+    long commit_q_head;
+    long commit_q_tail;
     size_t max_commit_q_len;
 //    tbb::concurrent_queue<void*> commit_buffer_queue;
     void* put_buffer;

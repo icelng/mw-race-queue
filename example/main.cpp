@@ -223,7 +223,7 @@ int main(int argc, char* argv[])
         queueLockMap[queueName];
     }
 
-    ProfilerStart("profile");
+//    ProfilerStart("profile");
 
     queue_store queueStore;
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
     std::cout << "Send: " << std::chrono::duration<double, std::milli>(sendSend - sendStart).count()
               << " ms Num: " << sendCounter << std::endl;
 
-    ProfilerStop();
+//    ProfilerStop();
 
     //Step2: 索引的正确性校验
     auto indexCheckStart = std::chrono::high_resolution_clock::now();

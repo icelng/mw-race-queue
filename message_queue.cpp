@@ -51,7 +51,7 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
 }
 
 void MessageQueue::put(const race2018::MemBlock &mem_block) {
-    lock_guard<mutex> lock(mtx);
+//    lock_guard<mutex> lock(mtx);
 
     is_need_commit = true;
     if (put_buffer == nullptr) {
