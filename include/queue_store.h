@@ -40,6 +40,7 @@ namespace race2018 {
          * please make sure it exists.
          */
         queue_store();
+        ~queue_store();
 
         /**
          * Note: Competitors need to implement this function and it will be called concurrently. It's your responsible

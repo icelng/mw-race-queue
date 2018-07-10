@@ -42,8 +42,8 @@ BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
 
     cout << ((pool_size * (u_int64_t) buffer_size) >> 20) << "M buffer have been allocated!" << endl;
 
-    pthread_t tid;
-    pthread_create(&tid, NULL, buffer_monitor, this);
+//    pthread_t tid;
+//    pthread_create(&tid, NULL, buffer_monitor, this);
 
 }
 

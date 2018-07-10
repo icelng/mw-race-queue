@@ -10,8 +10,8 @@ using namespace race2018;
 #define FILE_SIZE_200G (200 * FILE_SIZE_1G)
 #define REGION_SIZE (2 * 1024 * 1024 * 1024L)
 #define FILE_SIZE FILE_SIZE_200G
-#define WRITE_BUFFERS_NUM 2
-#define WRITE_BUFFERS_SIZE (256 * 1024 * 1024L)
+#define WRITE_BUFFERS_NUM 4
+#define WRITE_BUFFERS_SIZE (128 * 1024 * 1024L)
 #define QUEUE_TABLE_LEN 1000000
 
 #include "commit_service.h"
@@ -20,22 +20,31 @@ using namespace race2018;
 #include "message_queue.h"
 #include "buffer_pool.h"
 
+//#include "gperftools/profiler.h"
+
 
 queue_store::queue_store() {
+//    ProfilerStart("profile");
+
     store_io = new StoreIO("/alidata1/race2018/data/log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
 //    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE, WRITE_BUFFERS_NUM, WRITE_BUFFERS_SIZE);
 //    store_io = new StoreIO("./log", FILE_SIZE, REGION_SIZE);
     idle_page_manager = new IdlePageManager(FILE_SIZE, 4096);
 //    buffer_pool = new BufferPool(16000000, 256);
 //    buffer_pool = new BufferPool(17600000, 256);
-    buffer_pool = new BufferPool(4400000, 1024);
-//    buffer_pool = new BufferPool(8000000, 512);
+//    buffer_pool = new BufferPool(4400000, 1024);
+    buffer_pool = new BufferPool(8800000, 512);
     commit_service = new CommitService(store_io, buffer_pool, 1);
     commit_service->start();
     queue_table = (MessageQueue**) malloc(QUEUE_TABLE_LEN * sizeof(MessageQueue*));
     for (int i = 0;i < QUEUE_TABLE_LEN;i++) {
         queue_table[i] = nullptr;
     }
+}
+
+queue_store::~queue_store() {
+//    ProfilerStop();
+
 }
 
 /**

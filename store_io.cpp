@@ -10,6 +10,7 @@
 #include <cerrno>
 #include <cstring>
 
+
 using namespace std;
 
 void* flush_service(void* arg) {
@@ -46,10 +47,11 @@ StoreIO::StoreIO(const char* file_path,
     ftruncate(file_fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
     for (int i = 0;i < regions_num;i++) {
-        regions[i] = mmap(NULL, this->region_size, PROT_READ | PROT_WRITE, MAP_SHARED, file_fd, (long) i * this->region_size);
+        regions[i] = mmap(NULL, this->region_size, PROT_READ, MAP_SHARED, file_fd, (long) i * this->region_size);
         if (regions[i] == reinterpret_cast<void *>(-1)) {
             cout << "Failed to map file!!!" << strerror(errno) << endl;
         }
+        madvise(regions[i], this->region_size, MADV_RANDOM);  // 设置为随机访问
         printf("mapped region:0x%lx, phy_address:0x%lx, region_size:%dM\n", regions[i], (long) i * this->region_size, ((this->region_size) >> 20));
         cout << "mapped region:" << regions[i] << ", region_size:" << ((this->region_size) >> 20) << "M" << endl;
     }
@@ -179,6 +181,10 @@ void StoreIO::do_flush() {
 void StoreIO::wait_flush_done() {
     sem_wait(&is_flushing);
     sem_post(&is_flushing);
+}
+
+void StoreIO::add_offset(u_int64_t offset) {
+    buffer_offset += offset;
 }
 
 

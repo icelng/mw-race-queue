@@ -22,6 +22,11 @@ class BufferPool;
 
 using namespace race2018;
 
+struct PageEntry {
+    u_int64_t addr;
+    u_int64_t queue_len;
+};
+
 class MessageQueue {
 public:
     MessageQueue(IdlePageManager *idlePageManager, StoreIO *store_io, CommitService *commit_service, BufferPool *buffer_pool);
@@ -34,6 +39,7 @@ public:
 private:
     void commit_later();
     void shortToBytes(unsigned short v, unsigned char b[], int off);
+    void accumulate(const MemBlock& mem_block);
     unsigned short bytesToShort(unsigned char b[], int off);
     void expend_page_table();
     u_int64_t locate_msg_offset_in_page(void* page_start_ptr, u_int64_t msg_no);
@@ -45,12 +51,13 @@ private:
     BufferPool *buffer_pool;
     size_t queue_len;
     bool is_need_commit;
+    u_int32_t page_size;
     u_int32_t last_page_index;
     u_int32_t committing_page_index;
     sem_t commit_sem_lock;
     size_t committing_size;
     size_t need_commit_size;
-    u_int64_t *page_table;
+    PageEntry *page_table;
     size_t page_table_len;
     void** commit_buffer_queue;
     long commit_q_head;
@@ -61,7 +68,6 @@ private:
     u_int64_t put_buffer_offset;
     size_t buffer_size;
     std::mutex mtx;
-    std::atomic<int> hold_buffers_num;
 
     bool is_have_read_cache;
     bool is_read_cache_actived;

@@ -24,14 +24,15 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
     this->buffer_pool = buffer_pool;
     put_buffer_offset = 0;
     buffer_size = buffer_pool->get_buffer_size();
+    page_size = idle_page_manager->get_page_size();
     put_buffer = nullptr;
     is_need_commit = false;
     queue_len = 0;
     last_page_index = 0;
     need_commit_size = 0;
-    page_table = static_cast<u_int64_t *>(malloc(sizeof(u_int64_t) * (INITIAL_PAGE_TABLE_LEN * 2)));
+    page_table = (PageEntry*) (malloc(sizeof(PageEntry) * INITIAL_PAGE_TABLE_LEN));
     page_table_len = INITIAL_PAGE_TABLE_LEN;
-    max_commit_q_len = (idle_page_manager->get_page_size() / buffer_size) * 2 + 1;
+    max_commit_q_len = (page_size / buffer_size) * 2 + 1;
     commit_buffer_queue = (void **) malloc(max_commit_q_len * sizeof(void*));
     commit_q_head = 0;
     commit_q_tail = 0;
@@ -60,7 +61,7 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
     }
 
     /*判断是否攒够一页, 如果是, 则commit*/
-    if ((need_commit_size + mem_block.size + MSG_HEAD_SIZE) >= idle_page_manager->get_page_size()) {
+    if ((need_commit_size + mem_block.size + MSG_HEAD_SIZE) >= page_size) {
 
         if (last_page_index + 1 >= page_table_len) {
             expend_page_table();
@@ -73,10 +74,35 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
         is_need_commit = true;
 
         last_page_index++;
-        page_table[last_page_index * 2 + 1] = queue_len;
+        page_table[last_page_index].queue_len = queue_len;
+//        page_table[last_page_index * 2 + 1] = ;
 
     }
 
+    accumulate(mem_block);
+
+//    page_table[last_page_index * 2 + 1] = ++queue_len;
+    page_table[last_page_index].queue_len = ++queue_len;
+    need_commit_size += (MSG_HEAD_SIZE + mem_block.size);
+
+//    if (need_commit_size > idle_page_manager->get_page_size() - 30) {
+//        if (last_page_index + 1 >= page_table_len) {
+//            expend_page_table();
+//        }
+//
+//        commit_later();
+//        put_buffer_offset = 0;
+//        is_need_commit = false;
+//
+//        last_page_index++;
+////        page_table[last_page_index * 2 + 1] = queue_len;
+//        page_table[last_page_index].queue_len = queue_len;
+//
+//    }
+
+}
+
+void MessageQueue::accumulate(const MemBlock &mem_block) {
     unsigned char msg_head[MSG_HEAD_SIZE];
     u_int32_t put_offset = 0;
     size_t seg_save_size;
@@ -85,7 +111,7 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
 //    printf("head[0]:0x%x, head[1]:0x%x, size:%d\n", msg_head[0], msg_head[1], static_cast<unsigned short>(mem_block.size));
     while (put_offset < (mem_block.size + MSG_HEAD_SIZE)) {
         seg_save_size = std::min(buffer_size - put_buffer_offset,
-                                       (mem_block.size + MSG_HEAD_SIZE) - put_offset);
+                                 (mem_block.size + MSG_HEAD_SIZE) - put_offset);
 //        cout << "seg_save_size:" << seg_save_size << endl;
         /*先写头*/
         if (is_head) {
@@ -109,24 +135,6 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
             put_buffer_offset = 0;
         }
     }
-
-    page_table[last_page_index * 2 + 1] = ++queue_len;
-    need_commit_size += (MSG_HEAD_SIZE + mem_block.size);
-
-    if (need_commit_size > idle_page_manager->get_page_size() - 30) {
-        if (last_page_index + 1 >= page_table_len) {
-            expend_page_table();
-        }
-
-        commit_later();
-        put_buffer_offset = 0;
-        is_need_commit = false;
-
-        last_page_index++;
-        page_table[last_page_index * 2 + 1] = queue_len;
-
-    }
-
 
 }
 
@@ -155,8 +163,9 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
     for (int i = 0; i < adjust_num;i += read_num) {
 
-        msg_page_phy_address = page_table[cur_page_index * 2];
-        read_num = std::min(page_table[cur_page_index * 2 + 1] - (start_msg_index + i), adjust_num - i);
+//        msg_page_phy_address = page_table[cur_page_index * 2];
+        msg_page_phy_address = page_table[cur_page_index].addr;
+        read_num = std::min(page_table[cur_page_index].queue_len - (start_msg_index + i), adjust_num - i);
 //        if (read_num <= 0) {
 //            cout << "Read num = 0?ha? adjust_num:" << adjust_num << ", i:" << i << endl;
 //        }
@@ -172,7 +181,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
                 offset_in_page = last_read_offset_in_page;
             } else {
                 start_index_in_page = cur_page_index == 0 ?
-                                                start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
+                                                start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
                 offset_in_page = locate_msg_offset_in_page(read_cache_buffer, start_index_in_page);
             }
             read_start_ptr = read_cache_buffer + offset_in_page;
@@ -180,7 +189,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
             page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
             start_index_in_page = cur_page_index == 0 ?
-                                            start_msg_index : (start_msg_index + i) - page_table[(cur_page_index - 1) * 2 + 1];
+                                            start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
             offset_in_page = locate_msg_offset_in_page(page_start_ptr, start_index_in_page);
             read_start_ptr = page_start_ptr + offset_in_page;
         }
@@ -234,7 +243,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
     if (cur_read_cache_page_addr != msg_page_phy_address & is_read_cache_actived) {
         if (!is_have_read_cache) {
             /**第一次申请cache**/
-            read_cache_buffer = malloc(idle_page_manager->get_page_size());
+            read_cache_buffer = malloc(page_size);
 //            read_cache_buffer = buffer_pool->borrow_page();
             is_have_read_cache = true;
         }
@@ -242,7 +251,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
         void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
 
-        memcpy(read_cache_buffer, page_start_ptr, idle_page_manager->get_page_size());
+        memcpy(read_cache_buffer, page_start_ptr, page_size);
     }
 
 
@@ -279,13 +288,16 @@ void MessageQueue::do_commit() {
         store_io->write_data(commit_buffer, buffer_size);
         buffer_pool->return_buffer(commit_buffer);
         commit_offset += commit_size;
-        if (commit_offset > idle_page_manager->get_page_size()) {
+        if (commit_offset > page_size) {
             printf("The commit_offset(%ld) is larger than 4096", commit_offset);
         }
         if (i++ >= idle_page_manager->get_page_size()/buffer_size) {
             cout << "commit buffers error!!!num:" << i << endl;
         }
     }
+
+//    store_io->add_offset(page_size - committing_size);
+
     while (i++ < idle_page_manager->get_page_size()/buffer_size) {
         /*补充一页*/
         void* buffer_temp = buffer_pool->borrow_buffer();
@@ -294,7 +306,8 @@ void MessageQueue::do_commit() {
     }
 
 
-    page_table[committing_page_index * 2] = idle_page_phy_address;
+//    page_table[committing_page_index * 2] = idle_page_phy_address;
+    page_table[committing_page_index].addr = idle_page_phy_address;
 
 //    cout << "committed successfully!" << endl;
     sem_post(&commit_sem_lock);
@@ -362,9 +375,10 @@ unsigned short MessageQueue::bytesToShort(unsigned char *b, int off) {
 void MessageQueue::expend_page_table() {
     sem_wait(&commit_sem_lock);
 
-    u_int64_t* new_page_table = static_cast<u_int64_t *>(malloc(sizeof(u_int64_t) * ((page_table_len + EXPEND_PAGE_TABLE_LEN) * 2)));
+    PageEntry* new_page_table = (PageEntry*) (malloc(sizeof(PageEntry) * (page_table_len + EXPEND_PAGE_TABLE_LEN)));
     for (int i = 0;i < page_table_len * 2;i++) {
-        new_page_table[i] = page_table[i];
+        new_page_table[i].queue_len = page_table[i].queue_len;
+        new_page_table[i].addr = page_table[i].addr;
     }
     free(page_table);
     page_table = new_page_table;
@@ -401,7 +415,7 @@ u_int32_t MessageQueue::find_page_index(u_int64_t msg_index) {
     u_int32_t mid;
 
     for (mid = (top + bottom) / 2;bottom < top;mid = (top + bottom) / 2) {
-        if (page_table[mid * 2 + 1] <= msg_index) {
+        if (page_table[mid].queue_len <= msg_index) {
             bottom = mid + 1;
         } else {
             top = mid;
@@ -410,6 +424,7 @@ u_int32_t MessageQueue::find_page_index(u_int64_t msg_index) {
 
     return mid;
 }
+
 
 
 
