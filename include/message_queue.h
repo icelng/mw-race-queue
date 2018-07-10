@@ -39,7 +39,7 @@ public:
 private:
     void commit_later();
     void shortToBytes(unsigned short v, unsigned char b[], int off);
-    void accumulate(const MemBlock& mem_block);
+    void accumulate_to_buffers(const MemBlock &mem_block);
     unsigned short bytesToShort(unsigned char b[], int off);
     void expend_page_table();
     u_int64_t locate_msg_offset_in_page(void* page_start_ptr, u_int64_t msg_no);
@@ -67,6 +67,7 @@ private:
     void* put_buffer;
     u_int64_t put_buffer_offset;
     size_t buffer_size;
+    size_t buffers_num_per_page;
     std::mutex mtx;
 
     bool is_have_read_cache;

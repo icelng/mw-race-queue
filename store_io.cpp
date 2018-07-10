@@ -77,7 +77,6 @@ StoreIO::StoreIO(const char* file_path,
     pthread_t tid;
     pthread_create(&tid, NULL, flush_service, this);
 
-
 }
 
 void* StoreIO::get_region(u_int64_t addr) {

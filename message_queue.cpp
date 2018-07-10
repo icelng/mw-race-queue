@@ -25,6 +25,7 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
     put_buffer_offset = 0;
     buffer_size = buffer_pool->get_buffer_size();
     page_size = idle_page_manager->get_page_size();
+    buffers_num_per_page = page_size / buffer_size;
     put_buffer = nullptr;
     is_need_commit = false;
     queue_len = 0;
@@ -75,40 +76,36 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
 
         last_page_index++;
         page_table[last_page_index].queue_len = queue_len;
-//        page_table[last_page_index * 2 + 1] = ;
 
     }
 
-    accumulate(mem_block);
+    accumulate_to_buffers(mem_block);
 
-//    page_table[last_page_index * 2 + 1] = ++queue_len;
     page_table[last_page_index].queue_len = ++queue_len;
     need_commit_size += (MSG_HEAD_SIZE + mem_block.size);
 
-//    if (need_commit_size > idle_page_manager->get_page_size() - 30) {
-//        if (last_page_index + 1 >= page_table_len) {
-//            expend_page_table();
-//        }
-//
-//        commit_later();
-//        put_buffer_offset = 0;
-//        is_need_commit = false;
-//
-//        last_page_index++;
-////        page_table[last_page_index * 2 + 1] = queue_len;
-//        page_table[last_page_index].queue_len = queue_len;
-//
-//    }
+    if (need_commit_size > page_size - 30) {
+        if (last_page_index + 1 >= page_table_len) {
+            expend_page_table();
+        }
+
+        commit_later();
+        put_buffer_offset = 0;
+        is_need_commit = false;
+
+        last_page_index++;
+        page_table[last_page_index].queue_len = queue_len;
+
+    }
 
 }
 
-void MessageQueue::accumulate(const MemBlock &mem_block) {
+void MessageQueue::accumulate_to_buffers(const MemBlock &mem_block) {
     unsigned char msg_head[MSG_HEAD_SIZE];
     u_int32_t put_offset = 0;
     size_t seg_save_size;
     bool is_head = true;
     shortToBytes(static_cast<unsigned short>(mem_block.size), msg_head, 0);
-//    printf("head[0]:0x%x, head[1]:0x%x, size:%d\n", msg_head[0], msg_head[1], static_cast<unsigned short>(mem_block.size));
     while (put_offset < (mem_block.size + MSG_HEAD_SIZE)) {
         seg_save_size = std::min(buffer_size - put_buffer_offset,
                                  (mem_block.size + MSG_HEAD_SIZE) - put_offset);
@@ -130,7 +127,6 @@ void MessageQueue::accumulate(const MemBlock &mem_block) {
 
         if (put_buffer_offset == buffer_size) {
             commit_buffer_queue[commit_q_tail++%max_commit_q_len] = put_buffer;
-//            cout << "borrow buffer:" << commit_buffer_queue.unsafe_size() << endl;
             put_buffer = buffer_pool->borrow_buffer();
             put_buffer_offset = 0;
         }
@@ -163,12 +159,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
     for (int i = 0; i < adjust_num;i += read_num) {
 
-//        msg_page_phy_address = page_table[cur_page_index * 2];
         msg_page_phy_address = page_table[cur_page_index].addr;
         read_num = std::min(page_table[cur_page_index].queue_len - (start_msg_index + i), adjust_num - i);
-//        if (read_num <= 0) {
-//            cout << "Read num = 0?ha? adjust_num:" << adjust_num << ", i:" << i << endl;
-//        }
 
         u_int64_t read_offset = 0;
         void* read_start_ptr = 0;
@@ -268,45 +260,34 @@ void MessageQueue::do_commit() {
 
 
     idle_page_phy_address = idle_page_manager->get_one_page();
-//    mapped_region_ptr = store_io->get_region(idle_page_phy_address);
-//    idle_page_mem_ptr = mapped_region_ptr + (idle_page_phy_address & store_io->region_mask);
 
-    //cout << "idle_page_phy_address:" << idle_page_phy_address << ", mapped_region_ptr:" << mapped_region_ptr << ", idle_page_mem_ptr:" << idle_page_mem_ptr << endl;
 
     u_int64_t commit_offset = 0;
     int i = 0;
     while (commit_offset < committing_size) {
         void* commit_buffer;
-//        if (!commit_buffer_queue.try_pop(commit_buffer)) {
-//            cout << "Failed to pop commit_buffer when doing commit!!" << endl;
-//            break;
-//        }
         commit_buffer = commit_buffer_queue[commit_q_head++%max_commit_q_len];
         size_t commit_size = std::min(committing_size - commit_offset, buffer_size);
 //        cout << "commit size:" << commit_size << "committing size:" << committing_size << endl;
-//        memcpy(idle_page_mem_ptr + commit_offset, commit_buffer, commit_size);
         store_io->write_data(commit_buffer, buffer_size);
         buffer_pool->return_buffer(commit_buffer);
         commit_offset += commit_size;
         if (commit_offset > page_size) {
             printf("The commit_offset(%ld) is larger than 4096", commit_offset);
         }
-        if (i++ >= idle_page_manager->get_page_size()/buffer_size) {
+        if (i++ >= buffers_num_per_page) {
             cout << "commit buffers error!!!num:" << i << endl;
         }
     }
 
 //    store_io->add_offset(page_size - committing_size);
 
-    while (i++ < idle_page_manager->get_page_size()/buffer_size) {
+    while (i++ < buffers_num_per_page) {
         /*补充一页*/
-        void* buffer_temp = buffer_pool->borrow_buffer();
-        store_io->write_data(buffer_temp, buffer_size);
-        buffer_pool->return_buffer(buffer_temp);
+        store_io->add_offset(buffer_size);
     }
 
 
-//    page_table[committing_page_index * 2] = idle_page_phy_address;
     page_table[committing_page_index].addr = idle_page_phy_address;
 
 //    cout << "committed successfully!" << endl;
@@ -326,7 +307,6 @@ void MessageQueue::commit_later() {
     }
 
     commit_buffer_queue[commit_q_tail++%max_commit_q_len] = put_buffer;
-//    commit_buffer_queue.push(put_buffer);
 //    cout << "commit later" << endl;
     put_buffer = nullptr;
     committing_size = need_commit_size;
@@ -350,7 +330,6 @@ void MessageQueue::commit_now() {
     }
 
     commit_buffer_queue[commit_q_tail++%max_commit_q_len] = put_buffer;
-//    commit_buffer_queue.push(put_buffer);
 //    cout << "commit now" << endl;
     put_buffer = nullptr;
     committing_size = need_commit_size;
@@ -392,17 +371,6 @@ u_int64_t MessageQueue::locate_msg_offset_in_page(void *page_start_ptr, u_int64_
 
     for (int i = 0;i < msg_no;i++) {
         unsigned short msg_size = bytesToShort((unsigned char *) (page_start_ptr + offset), 0);
-//        if (msg_size > 83) {
-//            printf("failed locate msg, msg_size:%d, i:%d, offset:%ld\n", msg_size, i, offset);
-////            cout << "failed locate msg, msg_size:" << msg_size << ", offset:" << offset << endl;
-////            for (int j = 0;j < 4096;j++) {
-////                printf("%x ", ((unsigned char *)page_start_ptr)[j]);
-////                if (j % 32 == 0) {
-////                    printf("\n");
-////                }
-////            }
-////            printf("\n");
-//        }
         offset += (msg_size + MSG_HEAD_SIZE);
     }
 
