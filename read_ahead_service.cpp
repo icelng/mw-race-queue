@@ -23,7 +23,8 @@ ReadAheadService::ReadAheadService(size_t thread_num) {
     head = 0;
     tail = 0;
     sem_init(&request_num ,0 ,0);
-    pthread_spin_init(&queue_spin_lock, 0);
+//    pthread_spin_init(&queue_spin_lock, 0);
+    pthread_mutex_init(&queue_mutex_lock, 0);
 
     pthread_t tid;
     for (int i = 0;i < thread_num;i++) {
@@ -33,9 +34,11 @@ ReadAheadService::ReadAheadService(size_t thread_num) {
 
 void ReadAheadService::request_read_ahead(MessageQueue *message_queue) {
 
-    pthread_spin_lock(&queue_spin_lock);
+//    pthread_spin_lock(&queue_spin_lock);
+    pthread_mutex_lock(&queue_mutex_lock);
     request_queue[tail++ % (max_request_q_len + 1)] = message_queue;
-    pthread_spin_unlock(&queue_spin_lock);
+    pthread_mutex_unlock(&queue_mutex_lock);
+//    pthread_spin_unlock(&queue_spin_lock);
 
     sem_post(&request_num);
 
@@ -45,9 +48,11 @@ void ReadAheadService::do_read_ahead() {
     MessageQueue *message_queue;
 
     sem_wait(&request_num);
-    pthread_spin_lock(&queue_spin_lock);
+//    pthread_spin_lock(&queue_spin_lock);
+    pthread_mutex_lock(&queue_mutex_lock);
     message_queue = request_queue[head++ % (max_request_q_len + 1)];
-    pthread_spin_unlock(&queue_spin_lock);
+    pthread_mutex_unlock(&queue_mutex_lock);
+//    pthread_spin_unlock(&queue_spin_lock);
     message_queue->do_read_ahead();
 
 }

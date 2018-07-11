@@ -4,7 +4,7 @@ project(queue_race)
 
 set(CMAKE_CXX_STANDARD 11)
 #SET(CMAKE_CXX_FLAGS "-pg")
-SET(CMAKE_CXX_FLAGS "-O3")
+SET(CMAKE_CXX_FLAGS "-O2")
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 

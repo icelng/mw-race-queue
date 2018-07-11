@@ -27,7 +27,8 @@ private:
     std::atomic<long> head;
     std::atomic<long> tail;
     sem_t request_num;
-    pthread_spinlock_t queue_spin_lock;
+    pthread_mutex_t queue_mutex_lock;
+//    pthread_spinlock_t queue_spin_lock;
 
 };
 
