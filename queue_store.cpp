@@ -36,7 +36,7 @@ queue_store::queue_store() {
 //    buffer_pool = new BufferPool(4400000, 1024);
     buffer_pool = new BufferPool(8800000, 512);
     commit_service = new CommitService(store_io, buffer_pool, 1);
-    read_ahead_service = new ReadAheadService(128);
+    read_ahead_service = new ReadAheadService(256);
     commit_service->start();
     queue_table = (MessageQueue**) malloc(QUEUE_TABLE_LEN * sizeof(MessageQueue*));
     for (int i = 0;i < QUEUE_TABLE_LEN;i++) {
