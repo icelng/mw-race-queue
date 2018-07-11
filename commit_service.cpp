@@ -24,6 +24,7 @@ CommitService::CommitService(StoreIO *store_io, BufferPool *buffer_pool, unsigne
     tail = 0;
     pthread_spin_init(&spinlock, 0);
     is_need_commit_all = true;
+    pthread_mutex_init(&commit_mutex, 0);
 }
 
 void *service(void *arg) {

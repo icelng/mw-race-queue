@@ -23,7 +23,8 @@ public:
     void commit_all();
     void set_need_commit(MessageQueue *message_queue);
 
-    std::mutex commit_mutex;
+//    std::mutex commit_mutex;
+    pthread_mutex_t commit_mutex;
 private:
     unsigned int thread_num;
     StoreIO *store_io;

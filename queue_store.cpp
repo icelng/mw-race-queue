@@ -54,7 +54,7 @@ queue_store::~queue_store() {
  */
 void queue_store::put(const string& queue_name, const MemBlock& message) {
     MessageQueue *message_queue;
-    long queue_id = strtol(&queue_name.c_str()[6], NULL, 10);
+    long queue_id = atol(&queue_name.c_str()[6]);
 
     if (queue_table[queue_id] == nullptr) {
         std::lock_guard<mutex> lock(queue_table_mutex);

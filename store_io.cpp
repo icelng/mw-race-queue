@@ -65,8 +65,13 @@ StoreIO::StoreIO(const char* file_path,
     sem_init(&this->buffers_num, 0, buffers_num);
     sem_init(&this->flush_req_num, 0, 0);
     sem_init(&this->is_flushing, 0, 1);
+    max_flush_queue_len = buffers_num;
+    flush_queue = (FlushRequestNode*) malloc(sizeof(FlushRequestNode) * (buffers_num + 1));
+    pthread_spin_init(&flush_queue_lock, 0);
     flush_req_num_atomic = 0;
     buffer_now = NULL;
+    flush_q_head = 0;
+    flush_q_tail = 0;
 
     for (int i = 0;i < buffers_num;i++) {
         void* buffer;
@@ -92,10 +97,10 @@ void* StoreIO::get_region(u_int64_t addr) {
 void StoreIO::flush() {
     std::lock_guard<std::mutex> lock(flush_mutex);
     if (buffer_now != NULL) {
-        FlushRequestNode flush_req_node;
-        flush_req_node.buffer = buffer_now;
-        flush_req_node.flush_size = buffer_offset;
-        flush_queue.push(flush_req_node);
+        pthread_spin_lock(&flush_queue_lock);
+        flush_queue[flush_q_tail % (max_flush_queue_len + 1)].buffer = buffer_now;
+        flush_queue[flush_q_tail++ % (max_flush_queue_len + 1)].flush_size = buffer_offset;
+        pthread_spin_unlock(&flush_queue_lock);
         if (flush_req_num_atomic.fetch_add(1) == 0) {
             sem_wait(&is_flushing);
         }
@@ -127,10 +132,10 @@ void StoreIO::write_data(void *data, size_t data_size) {
 
         if (buffer_offset == buffer_size) {
             /*提交flush*/
-            FlushRequestNode flush_req_node;
-            flush_req_node.buffer = buffer_now;
-            flush_req_node.flush_size = buffer_offset;
-            flush_queue.push(flush_req_node);
+            pthread_spin_lock(&flush_queue_lock);
+            flush_queue[flush_q_tail % (max_flush_queue_len + 1)].buffer = buffer_now;
+            flush_queue[flush_q_tail++ % (max_flush_queue_len + 1)].flush_size = buffer_offset;
+            pthread_spin_unlock(&flush_queue_lock);
             if (flush_req_num_atomic.fetch_add(1) == 0) {
                 sem_wait(&is_flushing);
             }
@@ -158,10 +163,11 @@ void StoreIO::do_flush() {
 
     while (true) {
         sem_wait(&flush_req_num);
-        if (!flush_queue.try_pop(req_node)) {
-            cout << "Failed to pop FlushRequestNode!!" << endl;
-            continue;
-        }
+
+        pthread_spin_lock(&flush_queue_lock);
+        req_node.buffer = flush_queue[flush_q_head % (max_flush_queue_len + 1)].buffer;
+        req_node.flush_size = flush_queue[flush_q_head++ % (max_flush_queue_len + 1)].flush_size;
+        pthread_spin_unlock(&flush_queue_lock);
 
         /*写*/
         if (write(file_fd, req_node.buffer, req_node.flush_size) != req_node.flush_size) {

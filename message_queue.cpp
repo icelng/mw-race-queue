@@ -16,7 +16,7 @@ using namespace race2018;
 #define MSG_HEAD_SIZE 2
 #define INITIAL_PAGE_TABLE_LEN 40
 #define EXPEND_PAGE_TABLE_LEN 8
-#define MAX_READ_CACHE_QUEUE_LEN 4
+#define MAX_READ_CACHE_QUEUE_LEN 2
 
 MessageQueue::MessageQueue(IdlePageManager *idle_page_manager,
                            StoreIO *store_io,
@@ -72,9 +72,10 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
         put_buffer = buffer_pool->borrow_buffer();
         put_buffer_offset = 0;
     }
+    size_t add_size = mem_block.size + MSG_HEAD_SIZE;
 
     /*判断是否攒够一页, 如果是, 则commit*/
-    if ((need_commit_size + mem_block.size + MSG_HEAD_SIZE) >= page_size) {
+    if ((need_commit_size + add_size) >= page_size) {
 
         if (last_page_index + 1 >= page_table_len) {
             expend_page_table();
@@ -94,7 +95,7 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
     accumulate_to_buffers(mem_block);
 
     page_table[last_page_index].queue_len = ++queue_len;
-    need_commit_size += (MSG_HEAD_SIZE + mem_block.size);
+    need_commit_size += add_size;
 
     if (need_commit_size > page_size - 30) {
         if (last_page_index + 1 >= page_table_len) {
@@ -128,10 +129,13 @@ inline void MessageQueue::accumulate_to_buffers(const MemBlock &mem_block) {
             memcpy(put_buffer + put_buffer_offset, msg_head + put_offset, put_size);
             put_buffer_offset += put_size;
             put_offset += put_size;
+            seg_save_size -= put_size;
             if (put_offset == MSG_HEAD_SIZE) {
                 is_head = false;
             }
-        } else {
+        }
+
+        if (!is_head) {
             memcpy(put_buffer + put_buffer_offset, mem_block.ptr + (put_offset - MSG_HEAD_SIZE), seg_save_size);
             put_buffer_offset += seg_save_size;
             put_offset += seg_save_size;
@@ -314,16 +318,13 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
  * 不能被直接调用
  * */
 void MessageQueue::do_commit() {
-    lock_guard<mutex> lock(commit_service->commit_mutex);  // 并发commit page会乱
-
     u_int64_t idle_page_phy_address;
-
 
     idle_page_phy_address = idle_page_manager->get_one_page();
 
-
     u_int64_t commit_offset = 0;
     int i = 0;
+    pthread_mutex_lock(&commit_service->commit_mutex);   // 并发commit page会乱
     while (commit_offset < committing_size) {
         void* commit_buffer;
         commit_buffer = commit_buffer_queue[commit_q_head++%max_commit_q_len];
@@ -340,21 +341,18 @@ void MessageQueue::do_commit() {
         }
     }
 
-//    store_io->add_offset(page_size - committing_size);
-
     while (i++ < buffers_num_per_page) {
         /*补充一页*/
         store_io->add_offset(buffer_size);
     }
-
+    pthread_mutex_unlock(&commit_service->commit_mutex);
 
     page_table[committing_page_index].addr = idle_page_phy_address;
 
-//    cout << "committed successfully!" << endl;
     sem_post(&commit_sem_lock);
 }
 
-void MessageQueue::commit_later() {
+inline void MessageQueue::commit_later() {
 
     if (!is_need_commit) {
         return;

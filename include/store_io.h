@@ -9,6 +9,7 @@
 #include "semaphore.h"
 #include <mutex>
 #include <atomic>
+#include "pthread.h"
 
 struct FlushRequestNode {
     void* buffer;
@@ -41,8 +42,13 @@ private:
     size_t buffer_size;
     void* buffer_now;
     u_int64_t buffer_offset;
-    tbb::concurrent_queue<FlushRequestNode> flush_queue;
+//    tbb::concurrent_queue<FlushRequestNode> flush_queue;
+    FlushRequestNode* flush_queue;
+    std::atomic<long> flush_q_head;
+    std::atomic<long> flush_q_tail;
     tbb::concurrent_queue<void*> buffers;
+    pthread_spinlock_t flush_queue_lock;
+    size_t max_flush_queue_len;
     std::atomic<long> flush_req_num_atomic;
     sem_t flush_req_num;
     sem_t is_flushing;
