@@ -166,7 +166,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 //    commit_now();
     commit_service->commit_all();
 
-    if (read_cache_trigger++ > 3) {
+    if (read_cache_trigger++ > 2) {
         is_read_cache_actived = true;
     }
 
