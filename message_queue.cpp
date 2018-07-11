@@ -16,7 +16,7 @@ using namespace race2018;
 #define MSG_HEAD_SIZE 2
 #define INITIAL_PAGE_TABLE_LEN 40
 #define EXPEND_PAGE_TABLE_LEN 8
-#define MAX_READ_CACHE_QUEUE_LEN 3
+#define MAX_READ_CACHE_QUEUE_LEN 4
 
 MessageQueue::MessageQueue(IdlePageManager *idle_page_manager,
                            StoreIO *store_io,
