@@ -13,6 +13,7 @@ class StoreIO;
 class IdlePageManager;
 class CommitService;
 class BufferPool;
+class ReadAheadService;
 
 // Please keep this namespace intact.
 namespace race2018 {
@@ -79,6 +80,7 @@ namespace race2018 {
         IdlePageManager *idle_page_manager;
         CommitService *commit_service;
         BufferPool *buffer_pool;
+        ReadAheadService *read_ahead_service;
         std::mutex queue_table_mutex;
 
     };

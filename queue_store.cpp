@@ -1,5 +1,6 @@
 #include "queue_store.h"
 #include <cstring>
+#include "read_ahead_service.h"
 
 using namespace std;
 using namespace race2018;
@@ -35,6 +36,7 @@ queue_store::queue_store() {
 //    buffer_pool = new BufferPool(4400000, 1024);
     buffer_pool = new BufferPool(8800000, 512);
     commit_service = new CommitService(store_io, buffer_pool, 1);
+    read_ahead_service = new ReadAheadService(1);
     commit_service->start();
     queue_table = (MessageQueue**) malloc(QUEUE_TABLE_LEN * sizeof(MessageQueue*));
     for (int i = 0;i < QUEUE_TABLE_LEN;i++) {
@@ -57,7 +59,7 @@ void queue_store::put(const string& queue_name, const MemBlock& message) {
     if (queue_table[queue_id] == nullptr) {
         std::lock_guard<mutex> lock(queue_table_mutex);
         if (queue_table[queue_id] == nullptr) {
-            queue_table[queue_id] = new MessageQueue(idle_page_manager, store_io, commit_service, buffer_pool);
+            queue_table[queue_id] = new MessageQueue(idle_page_manager, store_io, commit_service, read_ahead_service, buffer_pool);
         }
     }
 

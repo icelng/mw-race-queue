@@ -19,6 +19,7 @@ class StoreIO;
 class IdlePageManager;
 class CommitService;
 class BufferPool;
+class ReadAheadService;
 
 using namespace race2018;
 
@@ -27,11 +28,22 @@ struct PageEntry {
     u_int64_t queue_len;
 };
 
+struct ReadCache {
+    void* page_cache;
+    u_int64_t phy_address;
+};
+
 class MessageQueue {
 public:
-    MessageQueue(IdlePageManager *idlePageManager, StoreIO *store_io, CommitService *commit_service, BufferPool *buffer_pool);
+    MessageQueue(IdlePageManager *idlePageManager,
+                 StoreIO *store_io,
+                 CommitService *commit_service,
+                 ReadAheadService *read_ahead_service,
+                 BufferPool *buffer_pool);
+
     void put(const race2018::MemBlock &mem_block);
     std::vector<race2018::MemBlock> get(long offset, long number);
+    void do_read_ahead();
     void do_commit();
     void commit_now();
 
@@ -48,6 +60,7 @@ private:
     IdlePageManager *idle_page_manager;
     StoreIO *store_io;
     CommitService *commit_service;
+    ReadAheadService *read_ahead_service;
     BufferPool *buffer_pool;
     size_t queue_len;
     bool is_need_commit;
@@ -70,13 +83,19 @@ private:
     size_t buffers_num_per_page;
     std::mutex mtx;
 
-    bool is_have_read_cache;
     bool is_read_cache_actived;
-    void* read_cache_buffer;
-    u_int64_t cur_read_cache_page_addr;
+    ReadCache* read_cache_queue;
+    std::atomic<long> read_cache_num;
+    size_t max_rc_q_len;
+    u_int64_t rc_q_head;
+    u_int64_t rc_q_tail;
+    pthread_mutex_t read_cache_q_lock;
     u_int64_t read_cache_trigger;
     long last_read_index;
+    u_int64_t last_read_page_address;
     u_int64_t last_read_offset_in_page;
+    sem_t read_ahead_sem_lock;
+    u_int32_t ra_start_page_index;
 };
 
 #endif //QUEUE_RACE_MESSAGE_QUEUE_H

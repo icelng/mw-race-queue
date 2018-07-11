@@ -8,6 +8,7 @@
 #include "commit_service.h"
 #include "buffer_pool.h"
 #include "malloc.h"
+#include "read_ahead_service.h"
 
 using namespace std;
 using namespace race2018;
@@ -15,13 +16,19 @@ using namespace race2018;
 #define MSG_HEAD_SIZE 2
 #define INITIAL_PAGE_TABLE_LEN 40
 #define EXPEND_PAGE_TABLE_LEN 8
+#define MAX_READ_CACHE_QUEUE_LEN 3
 
-MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io, CommitService *commit_service, BufferPool *buffer_pool) {
+MessageQueue::MessageQueue(IdlePageManager *idle_page_manager,
+                           StoreIO *store_io,
+                           CommitService *commit_service,
+                           ReadAheadService *read_ahead_service,
+                           BufferPool *buffer_pool) {
 
     this->idle_page_manager = idle_page_manager;
     this->store_io = store_io;
     this->commit_service = commit_service;
     this->buffer_pool = buffer_pool;
+    this->read_ahead_service = read_ahead_service;
     put_buffer_offset = 0;
     buffer_size = buffer_pool->get_buffer_size();
     page_size = idle_page_manager->get_page_size();
@@ -39,13 +46,17 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager, StoreIO *store_io
     commit_q_tail = 0;
 
     /**read cache**/
-    is_have_read_cache = false;
     is_read_cache_actived = false;
     read_cache_trigger = 0;
-    read_cache_buffer = NULL;
-    cur_read_cache_page_addr = 0;
+    max_rc_q_len = MAX_READ_CACHE_QUEUE_LEN;
+    read_cache_queue = (ReadCache*) malloc(sizeof(ReadCache) * (max_rc_q_len + 1));
+    read_cache_num = 0;
+    rc_q_head = 0;
+    rc_q_tail = 0;
     last_read_index = -1;
     last_read_offset_in_page = 0;
+    pthread_mutex_init(&read_cache_q_lock, 0);
+    sem_init(&read_ahead_sem_lock, 0, 1);
 
     commit_service->set_need_commit(this);
 
@@ -100,7 +111,7 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
 
 }
 
-void MessageQueue::accumulate_to_buffers(const MemBlock &mem_block) {
+inline void MessageQueue::accumulate_to_buffers(const MemBlock &mem_block) {
     unsigned char msg_head[MSG_HEAD_SIZE];
     u_int32_t put_offset = 0;
     size_t seg_save_size;
@@ -167,17 +178,39 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         u_int64_t offset_in_page;
         u_int64_t start_index_in_page;
         void* page_start_ptr;
-        if (cur_read_cache_page_addr == msg_page_phy_address && is_have_read_cache) {
-            page_start_ptr = read_cache_buffer;
-            if (last_read_index == start_msg_index) {
-                offset_in_page = last_read_offset_in_page;
-            } else {
-                start_index_in_page = cur_page_index == 0 ?
-                                                start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
-                offset_in_page = locate_msg_offset_in_page(read_cache_buffer, start_index_in_page);
+        bool is_hit_read_cache = false;
+
+        if (is_read_cache_actived && read_cache_num > 0) {
+            pthread_mutex_lock(&read_cache_q_lock);
+            long num = read_cache_num;
+            u_int64_t head_start = rc_q_head;
+            for (int j = 0;j < num;j++) {
+                ReadCache *read_cache = &read_cache_queue[(head_start + j) % (max_rc_q_len + 1)];
+                if (read_cache->phy_address == msg_page_phy_address) {
+                    /*命中读缓存*/
+                    is_hit_read_cache = true;
+                    page_start_ptr = read_cache->page_cache;
+                    if (last_read_index == start_msg_index && last_read_page_address == msg_page_phy_address) {
+                        offset_in_page = last_read_offset_in_page;
+                    } else {
+                        start_index_in_page = cur_page_index == 0 ?
+                                              start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
+                        offset_in_page = locate_msg_offset_in_page(read_cache->page_cache, start_index_in_page);
+                    }
+                    read_start_ptr = read_cache->page_cache + offset_in_page;
+                    break;
+                } else {
+                    /*没有命中,丢弃*/
+                    rc_q_head++;
+                    read_cache_num--;
+                    free(read_cache->page_cache);
+                }
             }
-            read_start_ptr = read_cache_buffer + offset_in_page;
-        } else {
+            pthread_mutex_unlock(&read_cache_q_lock);
+        }
+
+        if (!is_hit_read_cache) {
+            /*若没有命中缓存页,则使用map映射页*/
             void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
             page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
             start_index_in_page = cur_page_index == 0 ?
@@ -186,6 +219,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             read_start_ptr = page_start_ptr + offset_in_page;
         }
 
+        /**已获取到数据页,并且定位到消息的页偏移,开始读数据**/
         for (int j = 0;j < read_num;j++) {
             race2018::MemBlock block;
             auto msg_size = bytesToShort(static_cast<unsigned char *>(read_start_ptr + read_offset), 0);
@@ -205,7 +239,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 //            char save = ((char*)msg_buf)[msg_len];
 //            ((char *)msg_buf)[msg_len] = 0;
 //            if (strcmp(std::to_string(index).c_str(), static_cast<const char *>(msg_buf)) != 0) {
-//                printf("error, size:%d, msg:%s, need:%d, address:0x%lx, page start address:0x%lx start_index_in_page:%ld, offset_in_page:%ld\n", msg_size, (char*) msg_buf, index, msg_page_phy_address + offset_in_page + read_offset, msg_page_phy_address, start_index_in_page, offset_in_page);
+//                printf("error, is_hit_read_cache:%d, size:%d, msg:%s, need:%d, address:0x%lx, page start address:0x%lx start_index_in_page:%ld, offset_in_page:%ld\n", is_hit_read_cache, msg_size, (char*) msg_buf, index, msg_page_phy_address + offset_in_page + read_offset, msg_page_phy_address, start_index_in_page, offset_in_page);
 //                for (int k = 0;k < 4096;k++) {
 //                    printf("%x ", ((unsigned char *)page_start_ptr)[k]);
 //                    if ((k + 1) % 32 == 0) {
@@ -223,29 +257,42 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             block.size = msg_size;
             block.ptr = msg_buf;
             ret.push_back(block);
+            last_read_page_address = msg_page_phy_address;
             last_read_offset_in_page = offset_in_page + read_offset;
             last_read_index = start_msg_index + i + j + 1;
         }
 
-
-        cur_page_index ++;
+        cur_page_index++;
     }
 
-    /**把最后一页数据保存到常驻缓存中**/
-    if (cur_read_cache_page_addr != msg_page_phy_address & is_read_cache_actived) {
-        if (!is_have_read_cache) {
-            /**第一次申请cache**/
-            read_cache_buffer = malloc(page_size);
-//            read_cache_buffer = buffer_pool->borrow_page();
-            is_have_read_cache = true;
+
+    /**判断是否需要发起异步读请求**/
+    if (is_read_cache_actived && read_cache_num <= 1) {
+        sem_wait(&read_ahead_sem_lock);  // 等待正在进行的异步请求完毕(如果有)
+
+        if (read_cache_num > 1) {
+            /*不需要发起预读*/
+            sem_post(&read_ahead_sem_lock);
+            return ret;
         }
-        cur_read_cache_page_addr = msg_page_phy_address;
-        void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
-        void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
 
-        memcpy(read_cache_buffer, page_start_ptr, page_size);
+        if (read_cache_num == 0) {
+            /*此时,本次读请求最后读到的页一定是mapped页,把其加入到cache队列中*/
+            void* mapped_region_ptr = store_io->get_region(msg_page_phy_address);
+            void* page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
+            void* page_cache = malloc(page_size);
+            memcpy(page_cache, page_start_ptr, page_size);
+            pthread_mutex_lock(&read_cache_q_lock);
+            read_cache_queue[rc_q_tail % (max_rc_q_len + 1)].page_cache = page_cache;
+            read_cache_queue[rc_q_tail++ % (max_rc_q_len + 1)].phy_address = msg_page_phy_address;
+            read_cache_num++;
+            pthread_mutex_unlock(&read_cache_q_lock);
+        }
+
+        /*发起下一页开始的异步读请求*/
+        ra_start_page_index = cur_page_index;
+        read_ahead_service->request_read_ahead(this);
     }
-
 
     return ret;
 }
@@ -391,6 +438,40 @@ u_int32_t MessageQueue::find_page_index(u_int64_t msg_index) {
     }
 
     return mid;
+}
+
+
+void MessageQueue::do_read_ahead() {
+    size_t have_read_page_num = 0;
+    size_t need_read_page_num = 0;
+    u_int64_t msg_page_phy_address;
+    void* mapped_region_ptr;
+    void* page_start_ptr;
+
+    need_read_page_num = std::min(max_rc_q_len - read_cache_num, max_rc_q_len - have_read_page_num);
+    while (need_read_page_num != 0) {
+
+        for (int i = 0;i < need_read_page_num;i++) {
+            void* page_cache = malloc(page_size);
+            msg_page_phy_address = page_table[ra_start_page_index + have_read_page_num].addr;
+            mapped_region_ptr = store_io->get_region(msg_page_phy_address);
+            page_start_ptr = mapped_region_ptr + (msg_page_phy_address & store_io->region_mask);
+            memcpy(page_cache, page_start_ptr, page_size);
+
+            pthread_mutex_lock(&read_cache_q_lock);
+            read_cache_queue[rc_q_tail % (max_rc_q_len + 1)].page_cache = page_cache;
+            read_cache_queue[rc_q_tail++ % (max_rc_q_len + 1)].phy_address = msg_page_phy_address;
+            read_cache_num++;
+            pthread_mutex_unlock(&read_cache_q_lock);
+
+            have_read_page_num++;
+        }
+
+        need_read_page_num = std::min(max_rc_q_len - read_cache_num, max_rc_q_len - have_read_page_num);
+    }
+
+    sem_post(&read_ahead_sem_lock);
+
 }
 
 
