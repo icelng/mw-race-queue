@@ -86,6 +86,7 @@ private:
     bool is_read_cache_actived;
     ReadCache* read_cache_queue;
     std::atomic<long> read_cache_num;
+    std::atomic<bool> is_reading;
     size_t max_rc_q_len;
     u_int64_t rc_q_head;
     u_int64_t rc_q_tail;

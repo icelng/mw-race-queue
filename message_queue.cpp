@@ -57,6 +57,7 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager,
     last_read_offset_in_page = 0;
     pthread_mutex_init(&read_cache_q_lock, 0);
     sem_init(&read_ahead_sem_lock, 0, 1);
+    is_reading = false;
 
     commit_service->set_need_commit(this);
 
@@ -180,33 +181,44 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         void* page_start_ptr;
         bool is_hit_read_cache = false;
 
-        if (is_read_cache_actived && read_cache_num > 0) {
-            pthread_mutex_lock(&read_cache_q_lock);
-            long num = read_cache_num;
-            u_int64_t head_start = rc_q_head;
-            for (int j = 0;j < num;j++) {
-                ReadCache *read_cache = &read_cache_queue[(head_start + j) % (max_rc_q_len + 1)];
-                if (read_cache->phy_address == msg_page_phy_address) {
-                    /*命中读缓存*/
-                    is_hit_read_cache = true;
-                    page_start_ptr = read_cache->page_cache;
-                    if (last_read_index == start_msg_index && last_read_page_address == msg_page_phy_address) {
-                        offset_in_page = last_read_offset_in_page;
+        if (is_read_cache_actived && ((read_cache_num != 0) || is_reading)) {
+            while (true) {
+                if (read_cache_num == 0 && is_reading) {
+                    sem_wait(&read_ahead_sem_lock);
+                    sem_post(&read_ahead_sem_lock);
+                }
+
+                pthread_mutex_lock(&read_cache_q_lock);
+                long num = read_cache_num;
+                u_int64_t head_start = rc_q_head;
+                for (int j = 0;j < num;j++) {
+                    ReadCache *read_cache = &read_cache_queue[(head_start + j) % (max_rc_q_len + 1)];
+                    if (read_cache->phy_address == msg_page_phy_address) {
+                        /*命中读缓存*/
+                        is_hit_read_cache = true;
+                        page_start_ptr = read_cache->page_cache;
+                        if (last_read_index == start_msg_index && last_read_page_address == msg_page_phy_address) {
+                            offset_in_page = last_read_offset_in_page;
+                        } else {
+                            start_index_in_page = cur_page_index == 0 ?
+                                                  start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
+                            offset_in_page = locate_msg_offset_in_page(read_cache->page_cache, start_index_in_page);
+                        }
+                        read_start_ptr = read_cache->page_cache + offset_in_page;
+                        break;
                     } else {
-                        start_index_in_page = cur_page_index == 0 ?
-                                              start_msg_index : (start_msg_index + i) - page_table[cur_page_index - 1].queue_len;
-                        offset_in_page = locate_msg_offset_in_page(read_cache->page_cache, start_index_in_page);
+                        /*没有命中,丢弃*/
+                        rc_q_head++;
+                        read_cache_num--;
+                        free(read_cache->page_cache);
                     }
-                    read_start_ptr = read_cache->page_cache + offset_in_page;
+                }
+                pthread_mutex_unlock(&read_cache_q_lock);
+
+                if (is_hit_read_cache || (read_cache_num == 0 && !is_reading)) {
                     break;
-                } else {
-                    /*没有命中,丢弃*/
-                    rc_q_head++;
-                    read_cache_num--;
-                    free(read_cache->page_cache);
                 }
             }
-            pthread_mutex_unlock(&read_cache_q_lock);
         }
 
         if (!is_hit_read_cache) {
@@ -291,6 +303,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
         /*发起下一页开始的异步读请求*/
         ra_start_page_index = cur_page_index;
+        is_reading = true;
         read_ahead_service->request_read_ahead(this);
     }
 
@@ -470,6 +483,7 @@ void MessageQueue::do_read_ahead() {
         need_read_page_num = std::min(max_rc_q_len - read_cache_num, max_rc_q_len - have_read_page_num);
     }
 
+    is_reading = false;
     sem_post(&read_ahead_sem_lock);
 
 }
