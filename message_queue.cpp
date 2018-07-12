@@ -65,7 +65,7 @@ MessageQueue::MessageQueue(IdlePageManager *idle_page_manager,
 }
 
 void MessageQueue::put(const race2018::MemBlock &mem_block) {
-//    lock_guard<mutex> lock(mtx);
+    lock_guard<mutex> lock(mtx);
 
     is_need_commit = true;
     if (put_buffer == nullptr) {
@@ -112,6 +112,11 @@ void MessageQueue::put(const race2018::MemBlock &mem_block) {
     }
 
 }
+
+/**
+ * put_buffer为正在负责积攒消息的buffer,当put_buffer积满了之后,会把其链入到commit_buffer_queue.
+ * 消息攒够一页之时,就会发起commit请求,commit_buffer_queue就由commit线程(do_commit)消费.
+ * */
 
 inline void MessageQueue::accumulate_to_buffers(const MemBlock &mem_block) {
     unsigned char msg_head[MSG_HEAD_SIZE];
@@ -162,8 +167,6 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         return ret;
     }
 
-//    cout << "commit now" << endl;
-//    commit_now();
     commit_service->commit_all();
 
     if (read_cache_trigger++ > 2) {
@@ -185,9 +188,13 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
         void* page_start_ptr;
         bool is_hit_read_cache = false;
 
+        /**
+         * 判断是否命中read_cache,read_cache为预读所读到的页
+         * */
         if (is_read_cache_actived && ((read_cache_num != 0) || is_reading)) {
             while (true) {
                 if (read_cache_num == 0 && is_reading) {
+                    /*当发现预读页为空,并且正在处理预读请求*/
                     sem_wait(&read_ahead_sem_lock);
                     sem_post(&read_ahead_sem_lock);
                 }
@@ -235,7 +242,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             read_start_ptr = page_start_ptr + offset_in_page;
         }
 
-        /**已获取到数据页,并且定位到消息的页偏移,开始读数据**/
+        /**已获取到数据页,并且定位到消息的页内偏移,开始读数据**/
         for (int j = 0;j < read_num;j++) {
             race2018::MemBlock block;
             auto msg_size = bytesToShort(static_cast<unsigned char *>(read_start_ptr + read_offset), 0);
@@ -273,6 +280,8 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             block.size = msg_size;
             block.ptr = msg_buf;
             ret.push_back(block);
+
+            /*记录本次读的index,如果下一次是连续读,则可以省去页内定位操作*/
             last_read_page_address = msg_page_phy_address;
             last_read_offset_in_page = offset_in_page + read_offset;
             last_read_index = start_msg_index + i + j + 1;
@@ -305,7 +314,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
             pthread_mutex_unlock(&read_cache_q_lock);
         }
 
-        /*发起下一页开始的异步读请求*/
+        /*发起下一页开始的异步读请求,预读页数量由宏MAX_READ_CACHE_QUEUE_LEN来决定*/
         ra_start_page_index = cur_page_index;
         is_reading = true;
         read_ahead_service->request_read_ahead(this);
@@ -316,6 +325,7 @@ std::vector<race2018::MemBlock> MessageQueue::get(long start_msg_index, long msg
 
 /**
  * 不能被直接调用
+ * 把积攒成一页大小的消息(对应一个队列, 由若干个buffer存储)拷贝到写缓存中
  * */
 void MessageQueue::do_commit() {
     u_int64_t idle_page_phy_address;

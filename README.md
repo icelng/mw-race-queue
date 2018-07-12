@@ -1,44 +1,47 @@
-## Tools and libraries on the target environment
-1. CentOS 6.8
-1. CMake 3.6.1
-2. GCC 4.8.2
-3. Boost 1.67
-1. Libevent 2.0.22
-1. Libz 1.2.3
-1. Snappy 1.1.0
-1. Lzma(xz-devel)   0.5.beta.20091007git.el6
-1. lz4 r131
-1. TBB [2018 Update 5](https://github.com/01org/tbb/releases)
-
-## How to build
-
-####1. Create a build directory
-
-```commandline
-mkdir build
-cd build
-```
-
-####2. Build
-##### 2.1 Build your shared library only
-```commandline
-cmake ..
-make
-```
-
-##### 2.2 Build your shared library and dummy example
-```commandline
-cmake -DBUILD_EXAMPLE=ON ..
-make
-```
-
-##### 2.2.1. Run sample executable program
-```commandline
-./sample
-```
-
-
-
-选手需要做的是重写queue_store.cpp,更多资料参考Java的Demo。
+## 算法设计思路
+### 1. 数据存储模型
+使用一个大文件存储数据,消息按页(4K)存储,一页只存一个队列的消息,一个队列存多页.消息的索引方式参考了Kafka存储模型.
+每条消息存储时会在消息前边加上表示消息长度的消息头,在内存中只保存消息队列对应使用的页地址.当要检索
+某条消息时,先在内存中查询页地址,接着把一页数据从硬盘读出来,最后根据消息头表示的长度定位到具体的消息.
+### 2. MessageQueue对象
+每个队列对应一个MessageQueue对象,其所维护/使用的关键数据结构有:
+ * 数据页索引表 page_table
+ * 缓存池 buffer_pool
+ * 所绑定的提交线程 commit_service
+ * 所绑定的预读线程 read_ahead_service
+ * 硬盘IO对象 store_io
+ * 空闲页管理器 idle_page_manager
+### 3. 写(put)
+每一条消息从调用put方法开始到落盘结束共经过了两套缓存.第一套缓存是buffer缓存,目的是把消息积攒成一页大小.第二套缓存是写缓存其
+目的是把多页数据积攒成一个大块数据之后一起写盘.消息积攒成页的过程,是在put方法调用者所在的线程中进行的.当数据积攒成一页大小之后,
+就会把buffers交给commit线程,由commit线程把buffers数据拷贝到写缓存中.写缓存满了之后,flush线程把写缓存的数据写到硬盘里.
+#### 3.1 buffer缓存
+由缓冲池(buffer_pool)管理,每一个buffer的大小为512,共8800000个(可随意分割).需要使用buffer时向buffer_pool借取,使用完毕之后归还.
+如果取空则阻塞,直到有其它线程归还为止.buffer缓存所积攒的一页消息被commit线程拷贝到写缓存之后,会把buffer归还给buffer_pool.
+非常有必要把buffer设置小一点,多一点.因为如果少了,当产生数据比commit速度还快,会很容易发生借取不到而导致阻塞的问题,影响性能.
+#### 3.2 直接IO
+使用mmap或者普通的write函数都需要经过page cache.然而在极端的情况下(数据产生比落盘慢,cpu很吃紧),page cache的页中断所带来的开销
+是我忍受不了的.故而选择了直接IO方式,绕过page cache,直接把数据落盘.
+#### 3.3 写缓存
+因为使用了直接IO(O_DIRECT),所以写缓存需要自己管理.在此,使用了简单的循环缓冲技术,设置了
+4个128M的缓冲区.每当一个缓冲区被积满之后,就会把其提交给flush线程,由flush线程进行写盘.flush写盘完毕之后,把空的缓冲区放入到
+空闲队列中.
+#### 3.4 commit线程(commit_service)
+其维护一个commit请求队列.当用户调用put方法,把消息积满一页之后,就会向commit_service发起commit请求.commit线程负责把
+一页数据(由buffer存储)拷贝到写缓存中.commit的具体逻辑写在MessageQueue对象里(do_commit方法),由commit_service管理
+请求队列和执行do_commit方法.在这道题中,commit线程只开一个.
+#### 3.5 空闲页管理器 (idle_page_manager)
+负责分配空闲页.当前使用连续分配方式.在把一页数据写入硬盘之前,得先从idle_page_manager申请得到空闲页和其地址,记录到page_table中.
+### 3. 读(get)
+保存消息数据的物理页地址常驻在内存里(page_table).每当用户需要读取具体某一条消息时,先根据消息的index在page_table里找到
+消息所在的页,接着从硬盘里读取该页内容,最后根据消息头(长度)遍历定位到具体消息.
+#### 3.1 预读
+当发现在短时间之内连续读取某个队列的连续消息时,会触发预读.预读的操作由read_ahead_service负责.每当读完一页的消息,
+发现read_cache(预读页)少于或等于一页,则会向read_ahead_service发起下来几页的预读请求.read_ahead_service接收到预读请求之后,把
+需要预读的页读到内存,并且push到read_cache队列.用户下一次调用get方法时,首先遍历read_cache队列,若不命中页则把read_cache释放,
+若命中则读取页内容.如果没有命中read_cache,则通过mapped页来读取数据.因为虽然数据是按顺序写盘的,但是队列的页并不是按顺序存的
+(哪个队列积满一页,哪个队列就可先落盘),所以读数据时,就得在硬盘上随机读取页,故读的性能瓶颈在iops上.为了达到最高的iops,应该把预读的线程
+数量设置大一点(当前设置为128个).还有一个需要特别注意的是,当预读处理正在进行的时候,只要read_cache队列不是空,用户调用get方法时,还是可以
+先去遍历read_cache队列的.当read_cache队列为空,并且有预读请求正在进行,才会在用户调用get方法时线程被阻塞,read_cache队列一有数据即可继续运行.
 
 
