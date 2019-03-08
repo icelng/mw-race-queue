@@ -43,7 +43,7 @@ StoreIO::StoreIO(const char* file_path,
     }
 
     cout << "Open log-file" << endl;
-    file_fd = open(file_path, O_RDWR | O_CREAT | O_DIRECT);
+    file_fd = open(file_path, O_RDWR | O_CREAT | O_DIRECT, 0644);
     ftruncate(file_fd, file_size);
     regions = static_cast<void **>(malloc(sizeof(void*) * regions_num));
     for (int i = 0;i < regions_num;i++) {

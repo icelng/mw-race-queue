@@ -27,11 +27,15 @@ BufferPool::BufferPool(u_int64_t pool_size, u_int64_t buffer_size) {
     this->head = 0;
     this->tail = pool_size;
     this->page_get_index = 0;
-    this->memory = malloc(pool_size * buffer_size);
-    this->buffers = (void **) malloc(max_queue_length * sizeof(void *));
     pthread_spin_init(&spinlock, 0);
 
+    this->memory = malloc(pool_size * buffer_size);
+    if (this->memory == NULL) {
+        std::cerr << "Buffer内存分配失败！！！！" <<std::endl;
+        exit(1);
+    }
 
+    this->buffers = (void **) malloc(max_queue_length * sizeof(void *));
     for (int i = 0;i < pool_size;i++) {
         buffers[i] = this->memory + buffer_size * i;
         memset(buffers[i], 0, buffer_size);
